@@ -1,7 +1,7 @@
 import "./fishtank.css";
 import { h, s } from "../shared/dom";
 import { ALL_ART, FLOOR_ART, spriteSheet, useSvg, type FishId } from "./art";
-import { isOffscreen, isWalkerOffscreen, newTarget, scareFish, scareWalker, sendAway, sendWalkerAway, stepFish, stepWalker, type Bounds, type FloorKind, type Fish, type Walker } from "./sim";
+import { hasExited, newDrift, scareFish, scareWalker, sendAway, stepFish, stepWalker, walkerExited, type Bounds, type FloorKind, type Fish, type Walker } from "./sim";
 
 /** Fish Tank: a touch toy. Tap or drag and nearby fish dart away; crabs, starfish and hermit crabs walk the sand.
  *  Everything is drawn in code. No sound, no storage, no network. */
@@ -23,14 +23,15 @@ const ROSTER: Spec[] = [
 ];
 const FLOOR: { kind: FloorKind; width: number; walk: number; run: number; weight: number }[] = [
   { kind: "crab", width: 0.2, walk: 0.1, run: 7, weight: 15 },
-  { kind: "starfish", width: 0.13, walk: 0.02, run: 5, weight: 15 },
+  { kind: "starfish", width: 0.13, walk: 0.035, run: 5, weight: 15 },
   { kind: "hermit", width: 0.16, walk: 0.045, run: 4, weight: 15 },
 ];
 /** Between 3 and 6 things are in the tank at once, fish and sand creatures together (a school counts as one).
- *  The number drifts at random. Each thing arrives from a side of the screen, stays a while, leaves, and is replaced by something else.
- *  At most two big fish at a time. */
+ *  The number drifts at random. Each thing swims or walks in from one side, crosses the tank in a straight line without turning
+ *  around, leaves by the far side, and is replaced by something else a few seconds later. At most two big fish at a time. */
 const MIN_THINGS = 3, MAX_THINGS = 6, MAX_BIG = 2, BIG = 0.38;
-const STAY: [number, number] = [30, 70], GAP: [number, number] = [2, 8], RETARGET: [number, number] = [15, 40];
+const GAP: [number, number] = [0.3, 2.5], RETARGET: [number, number] = [15, 40];
+const MAX_STAY = 150; // safety: anything still on screen after this long is sent off
 
 const SVGNS = "http://www.w3.org/2000/svg";
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -64,8 +65,10 @@ function start() {
     if (targetTimer > 0) return;
     target = randomTarget(); targetTimer = rnd(...RETARGET);
     if (activeCount() > target) {
-      const stayers = slots.filter((sl) => sl.phase === "present").sort((a, b) => a.timer - b.timer);
-      if (stayers[0]) stayers[0].timer = Math.min(stayers[0].timer, rnd(2, 8));
+      // the thing closest to its exit goes on its way a little sooner (floor creatures just keep walking)
+      const stayers = slots.filter((sl) => sl.phase === "present" && sl.views.length > 0);
+      stayers.sort((a, b) => Math.min(...a.views.map((v) => (v.f.heading > 0 ? bounds.w - v.f.x : v.f.x))) - Math.min(...b.views.map((v) => (v.f.heading > 0 ? bounds.w - v.f.x : v.f.x))));
+      if (stayers[0]) sendOff(stayers[0]);
     }
   }
 
@@ -123,7 +126,7 @@ function start() {
       const w = spec.width * S, hgt = w * (art.h / art.w);
       const el = h("div", { class: "walker", style: `width:${w}px;height:${hgt}px` }, inlineSvg(spec.kind));
       tank.append(el);
-      const c: Walker = { kind: spec.kind, x: onscreen ? rnd(w, W - w) : side < 0 ? -w : W + w, y: Math.random(), dir: onscreen ? (Math.random() < 0.5 ? 1 : -1) : (-side as 1 | -1), state: "walk", timer: rnd(1, 5), walk: spec.walk * S, runMult: spec.run, half: w / 2 };
+      const c: Walker = { kind: spec.kind, x: onscreen ? rnd(w, W - w) : side < 0 ? -w : W + w, y: Math.random(), dir: onscreen ? (Math.random() < 0.5 ? 1 : -1) : (-side as 1 | -1), state: "walk", timer: rnd(2, 6), walk: spec.walk * S, runMult: spec.run, half: w / 2 };
       if (!onscreen) c.mode = "in";
       slot.walker = { c, el, w, h: hgt };
       slot.id = spec.kind; slot.big = false;
@@ -133,40 +136,43 @@ function start() {
       const cruise = S * (0.15 - 0.12 * spec.width) * (reduce ? 0.6 : 1);
       const bx = onscreen ? rnd(w, W - w) : side < 0 ? -w * 1.2 : W + w * 1.2;
       const by = rnd(hgt, Math.max(hgt + 1, bounds.floorTop - hgt));
+      const heading: -1 | 1 = onscreen ? (Math.random() < 0.5 ? 1 : -1) : (-side as 1 | -1);
       for (let i = 0; i < spec.count; i++) {
         const el = h("div", { class: "fish", style: `width:${w}px;height:${hgt}px;z-index:${Math.round(1000 - w)}` }, useSvg(spec.id, art));
         tank.append(el);
-        const f: Fish = { x: bx, y: by, vx: 0, vy: 0, cruise: cruise * rnd(0.85, 1.15), half: { w: w / 2, h: hgt / 2 }, tx: bx, ty: by, retarget: rnd(1, 4), upright: !!spec.upright };
+        const f: Fish = { x: bx, y: by, vx: heading * cruise, vy: 0, cruise: cruise * rnd(0.85, 1.15), half: { w: w / 2, h: hgt / 2 }, heading, ty: by, retarget: rnd(1, 4), upright: !!spec.upright };
         if (spec.school && i > 0) {
           const dx = rnd(-w * 1.6, w * 1.6), dy = rnd(-w * 0.9, w * 0.9);
           f.follow = { leader: 0, dx, dy };
           f.x = bx + dx + (onscreen ? 0 : side * Math.abs(dx)); f.y = Math.min(bounds.floorTop - hgt, Math.max(hgt, by + dy));
-        } else newTarget(f, bounds);
-        if (!onscreen) { f.mode = "in"; f.vx = -side * cruise; }
-        slot.views.push({ f, el, w, h: hgt, dir: onscreen ? (Math.random() < 0.5 ? 1 : -1) : side < 0 ? 1 : -1, angle: 0, phase: rnd(0, 6.28) });
+        } else newDrift(f, bounds);
+        if (!onscreen) f.mode = "in";
+        slot.views.push({ f, el, w, h: hgt, dir: heading, angle: 0, phase: rnd(0, 6.28) });
       }
       slot.id = spec.id; slot.big = !spec.school && spec.width >= BIG;
     }
     slot.phase = onscreen ? "present" : "in";
-    slot.timer = onscreen ? rnd(8, STAY[1]) : rnd(...STAY);
+    slot.timer = MAX_STAY;
   }
 
   const arrived = (sl: Slot) => (sl.walker ? !sl.walker.c.mode : !!sl.views[0] && !sl.views[0].f.mode);
-  const departed = (sl: Slot) => (sl.walker ? isWalkerOffscreen(sl.walker.c, bounds) : sl.views.every((v) => isOffscreen(v.f, bounds)));
+  const departed = (sl: Slot) => (sl.walker ? walkerExited(sl.walker.c, bounds) : sl.views.length > 0 && sl.views.every((v) => hasExited(v.f, bounds)));
+
+  /** Send a slot's fish toward the side they are already heading to, so they leave without turning around. */
+  function sendOff(sl: Slot) { sl.phase = "out"; for (const v of sl.views) sendAway(v.f, bounds); }
 
   function lifecycle(slot: Slot, dt: number) {
     if (slot.phase === "in" && arrived(slot)) slot.phase = "present";
-    else if (slot.phase === "present") {
+    else if (slot.phase === "present" || slot.phase === "out") {
       slot.timer -= dt;
-      if (slot.timer <= 0) {
-        slot.phase = "out";
-        for (const v of slot.views) sendAway(v.f, bounds);
-        if (slot.walker) sendWalkerAway(slot.walker.c, bounds);
+      if (slot.phase === "present" && slot.timer <= 0) sendOff(slot);
+      // the rest of a school follows its leader out
+      if (slot.views.length > 1 && hasExited(slot.views[0]!.f, bounds)) for (const v of slot.views) if (v.f.mode !== "out") sendAway(v.f, bounds);
+      if (departed(slot)) {
+        for (const v of slot.views) v.el.remove();
+        slot.walker?.el.remove();
+        slot.views = []; slot.walker = undefined; slot.id = undefined; slot.big = false; slot.phase = "gone"; slot.timer = rnd(...GAP);
       }
-    } else if (slot.phase === "out" && departed(slot)) {
-      for (const v of slot.views) v.el.remove();
-      slot.walker?.el.remove();
-      slot.views = []; slot.walker = undefined; slot.id = undefined; slot.big = false; slot.phase = "gone"; slot.timer = rnd(...GAP);
     } else if (slot.phase === "gone") {
       slot.timer -= dt;
       if (slot.timer <= 0 && activeCount() < target) spawn(slot, false);
@@ -186,8 +192,10 @@ function start() {
   }
   function scare(x: number, y: number, strength: number) {
     const R = radius();
-    for (const sl of slots) for (const v of sl.views) scareFish(v.f, x, y, R, strength);
-    for (const sl of slots) if (sl.walker) scareWalker(sl.walker.c, x, y, R * 1.1, floorY(sl.walker));
+    for (const sl of slots) {
+      for (const v of sl.views) scareFish(v.f, x, y, R, strength);
+      if (sl.walker) scareWalker(sl.walker.c, x, y, R * 1.1, floorY(sl.walker));
+    }
   }
 
   let lastDrag = 0;
@@ -221,7 +229,7 @@ function start() {
       const group = sl.views.map((x) => x.f);
       for (const v of sl.views) {
       stepFish(v.f, dt, bounds, group);
-      if (Math.abs(v.f.vx) > v.f.cruise * 0.3) v.dir = v.f.vx >= 0 ? 1 : -1;
+      v.dir = v.f.heading;
       const sp = Math.hypot(v.f.vx, v.f.vy);
       const wig = Math.sin(t * (4 + sp / v.f.cruise * 2) + v.phase) * Math.min(0.09, 0.03 + sp / v.f.cruise * 0.01);
       const want = v.f.upright ? wig * 0.6 : v.dir * Math.max(-0.5, Math.min(0.5, Math.atan2(v.f.vy, Math.max(Math.abs(v.f.vx), 1)))) + wig;
