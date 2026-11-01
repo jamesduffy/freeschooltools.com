@@ -3,7 +3,7 @@ export type Tool = { id: string; name: string; path: string; summary: string; st
 
 /** Link to the external suggestion form. Duffy creates the form and supplies the address.
  *  The production build fails while this still contains the placeholder marker. */
-export const SUGGESTION_FORM_URL = "https://REPLACE_ME.example/suggest-a-tool";
+export const SUGGESTION_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf5gSVWvgNhhB7WIlAx-bo8lFQFnmTqWqFgCiT8m1fK_GX3Hw/viewform?usp=publish-editor";
 
 export const tools: Tool[] = [
   {
