@@ -97,9 +97,27 @@ export type Walker = {
   walk: number; // walking speed, px/s
   runMult: number; // how much faster it runs when scared
   half: number; // half its drawn width
+  /** "in": walking in from off screen. "out": walking off screen to leave. Neither bounces off the edges. */
+  mode?: "in" | "out";
 };
 
+export const isWalkerOffscreen = (c: Walker, b: Bounds): boolean => c.x < -c.half || c.x > b.w + c.half;
+
+/** Make a floor creature walk off the nearest side. */
+export function sendWalkerAway(c: Walker, b: Bounds): void {
+  c.mode = "out";
+  c.dir = c.x < b.w / 2 ? -1 : 1;
+  c.state = "walk";
+}
+
 export function stepWalker(c: Walker, dt: number, b: Bounds, r: () => number = Math.random): void {
+  if (c.mode) {
+    // arriving or leaving: keep walking the same way, no resting, no turning back at the edges
+    c.state = "walk";
+    c.x += c.dir * c.walk * (c.mode === "out" ? 1.5 : 1.2) * dt;
+    if (c.mode === "in" && c.x >= c.half && c.x <= b.w - c.half) { c.mode = undefined; c.timer = 0.5; }
+    return;
+  }
   c.timer -= dt;
   if (c.timer <= 0) {
     if (c.state === "walk") { c.state = "idle"; c.timer = rand(1, 3.5, r); }
@@ -118,7 +136,7 @@ export function stepWalker(c: Walker, dt: number, b: Bounds, r: () => number = M
 /** Floor creatures run away from a tap (the hermit crab hides in its shell for a moment instead). */
 export function scareWalker(c: Walker, tx: number, ty: number, radius: number, floorY: number): boolean {
   const d = Math.hypot(c.x - tx, floorY - ty);
-  if (d > radius) return false;
+  if (d > radius || c.mode) return false;
   if (c.kind === "hermit") { c.state = "hide"; c.timer = 2.4; return true; }
   c.dir = c.x >= tx ? 1 : -1;
   c.state = "run"; c.timer = 1.1;

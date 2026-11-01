@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FLEE_MULTIPLIER, isOffscreen, sendAway, scareFish, scareWalker, stepFish, stepWalker, type Bounds, type Fish, type Walker } from "../src/fishtank/sim";
+import { FLEE_MULTIPLIER, isOffscreen, isWalkerOffscreen, sendWalkerAway, sendAway, scareFish, scareWalker, stepFish, stepWalker, type Bounds, type Fish, type Walker } from "../src/fishtank/sim";
 
 const b: Bounds = { w: 800, h: 600, floorTop: 480 };
 const fish = (o: Partial<Fish> = {}): Fish => ({ x: 400, y: 200, vx: 0, vy: 0, cruise: 60, half: { w: 30, h: 15 }, tx: 400, ty: 200, retarget: 5, upright: false, ...o });
@@ -108,5 +108,29 @@ describe("floor creatures", () => {
   });
   it("far-away creatures ignore the tap", () => {
     expect(scareWalker(walker({ x: 700 }), 50, 50, 200, 480)).toBe(false);
+  });
+});
+
+describe("floor creatures coming and going", () => {
+  it("one sent away walks off the screen without turning back or resting", () => {
+    const c = walker({ x: 700, dir: 1, timer: 0 });
+    sendWalkerAway(c, b);
+    for (let i = 0; i < 60 * 30 && !isWalkerOffscreen(c, b); i++) stepWalker(c, 1 / 60, b);
+    expect(isWalkerOffscreen(c, b)).toBe(true);
+    expect(c.dir).toBe(1);
+  });
+  it("leaves by the nearest side", () => {
+    const c = walker({ x: 100 }); sendWalkerAway(c, b); expect(c.dir).toBe(-1);
+  });
+  it("one arriving walks in from off screen, then behaves normally", () => {
+    const c = walker({ x: -40, dir: 1, mode: "in" });
+    for (let i = 0; i < 60 * 30 && c.mode; i++) stepWalker(c, 1 / 60, b);
+    expect(c.mode).toBeUndefined();
+    expect(c.x).toBeGreaterThanOrEqual(c.half);
+  });
+  it("a tap does not turn back a creature that is arriving or leaving", () => {
+    const c = walker({ mode: "out" });
+    expect(scareWalker(c, 300, 480, 400, 480)).toBe(false);
+    expect(c.state).toBe("walk");
   });
 });
