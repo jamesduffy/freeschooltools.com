@@ -13,7 +13,18 @@ export type Fish = {
   upright: boolean;
   /** If set, this fish follows another fish at an offset (the minnow school). */
   follow?: { leader: number; dx: number; dy: number };
+  /** "in": swimming in from off screen. "out": swimming off screen to leave. Neither is held inside the walls. */
+  mode?: "in" | "out";
+  exitX?: number; // where a leaving fish is heading, beyond the left or right edge
 };
+
+export const isOffscreen = (f: Fish, b: Bounds): boolean => f.x < -f.half.w || f.x > b.w + f.half.w;
+
+/** Send a fish off the nearest side. */
+export function sendAway(f: Fish, b: Bounds): void {
+  f.mode = "out";
+  f.exitX = f.x < b.w / 2 ? -f.half.w * 3 : b.w + f.half.w * 3;
+}
 
 export const FLEE_MULTIPLIER = 10; // top flee speed, as a multiple of cruise speed
 export const RELAX_PER_SECOND = 1.6; // how quickly a scared fish calms down
@@ -28,16 +39,19 @@ export function newTarget(f: Fish, b: Bounds, r: () => number = Math.random): vo
 
 /** Move one fish forward by dt seconds. `fishes` is needed only for followers. */
 export function stepFish(f: Fish, dt: number, b: Bounds, fishes: Fish[] = [], r: () => number = Math.random): void {
-  if (f.follow) {
+  if (f.mode === "out") {
+    f.tx = f.exitX ?? (f.x < b.w / 2 ? -f.half.w * 3 : b.w + f.half.w * 3);
+    f.ty = f.y;
+  } else if (f.follow) {
     const l = fishes[f.follow.leader];
     if (l) { f.tx = l.x + f.follow.dx; f.ty = l.y + f.follow.dy; }
-  } else {
+  } else if (f.mode !== "in") {
     f.retarget -= dt;
     if (f.retarget <= 0 || Math.hypot(f.tx - f.x, f.ty - f.y) < f.cruise * 0.25) newTarget(f, b, r);
   }
   // steer toward the target at cruise speed; a scare leaves extra speed that fades away
   const dx = f.tx - f.x, dy = f.ty - f.y, d = Math.hypot(dx, dy) || 1;
-  const speed = f.follow ? Math.min(f.cruise * 1.4, Math.max(f.cruise * 0.4, d * 1.5)) : f.cruise;
+  const speed = f.mode === "out" ? f.cruise * 1.2 : f.follow ? Math.min(f.cruise * 1.4, Math.max(f.cruise * 0.4, d * 1.5)) : f.cruise;
   const k = 1 - Math.exp(-dt * RELAX_PER_SECOND);
   f.vx += (((dx / d) * speed) - f.vx) * k;
   f.vy += (((dy / d) * speed) - f.vy) * k;
@@ -45,8 +59,11 @@ export function stepFish(f: Fish, dt: number, b: Bounds, fishes: Fish[] = [], r:
   f.y += f.vy * dt;
   // stay inside the tank, bouncing off the walls and the sand
   const minX = f.half.w, maxX = b.w - f.half.w, minY = f.half.h + 4, maxY = Math.max(minY + 1, b.floorTop - f.half.h);
-  if (f.x < minX) { f.x = minX; f.vx = Math.abs(f.vx); }
-  if (f.x > maxX) { f.x = maxX; f.vx = -Math.abs(f.vx); }
+  if (f.mode === "in" && f.x >= minX && f.x <= maxX) f.mode = undefined; // it has swum all the way in
+  if (!f.mode) {
+    if (f.x < minX) { f.x = minX; f.vx = Math.abs(f.vx); }
+    if (f.x > maxX) { f.x = maxX; f.vx = -Math.abs(f.vx); }
+  }
   if (f.y < minY) { f.y = minY; f.vy = Math.abs(f.vy); }
   if (f.y > maxY) { f.y = maxY; f.vy = -Math.abs(f.vy); }
 }

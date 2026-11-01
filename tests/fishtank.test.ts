@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FLEE_MULTIPLIER, scareFish, scareWalker, stepFish, stepWalker, type Bounds, type Fish, type Walker } from "../src/fishtank/sim";
+import { FLEE_MULTIPLIER, isOffscreen, sendAway, scareFish, scareWalker, stepFish, stepWalker, type Bounds, type Fish, type Walker } from "../src/fishtank/sim";
 
 const b: Bounds = { w: 800, h: 600, floorTop: 480 };
 const fish = (o: Partial<Fish> = {}): Fish => ({ x: 400, y: 200, vx: 0, vy: 0, cruise: 60, half: { w: 30, h: 15 }, tx: 400, ty: 200, retarget: 5, upright: false, ...o });
@@ -47,6 +47,33 @@ describe("fish", () => {
     const all = [leader, f];
     for (let i = 0; i < 600; i++) stepFish(f, 1 / 60, b, all);
     expect(Math.hypot(f.x - 580, f.y - 300)).toBeLessThan(40);
+  });
+});
+
+describe("fish coming and going", () => {
+  it("a fish sent away swims off the screen and is not stopped by the wall", () => {
+    const f = fish({ x: 700, y: 200, tx: 700, ty: 200, retarget: 100 });
+    sendAway(f, b);
+    expect(f.exitX).toBeGreaterThan(b.w);
+    for (let i = 0; i < 60 * 20 && !isOffscreen(f, b); i++) stepFish(f, 1 / 60, b);
+    expect(isOffscreen(f, b)).toBe(true);
+  });
+  it("leaves by the nearest side", () => {
+    const l = fish({ x: 100 }); sendAway(l, b); expect(l.exitX).toBeLessThan(0);
+  });
+  it("a fish starting off screen swims in, then is held inside the walls like any other", () => {
+    const f = fish({ x: -60, y: 200, tx: 400, ty: 200, retarget: 100, mode: "in" });
+    expect(isOffscreen(f, b)).toBe(true);
+    for (let i = 0; i < 60 * 15 && f.mode; i++) stepFish(f, 1 / 60, b);
+    expect(f.mode).toBeUndefined();
+    expect(isOffscreen(f, b)).toBe(false);
+    for (let i = 0; i < 600; i++) stepFish(f, 1 / 60, b);
+    expect(f.x).toBeGreaterThanOrEqual(f.half.w);
+  });
+  it("an arriving fish keeps its heading until it is inside, ignoring retarget timers", () => {
+    const f = fish({ x: -80, tx: 400, retarget: 0, mode: "in" });
+    stepFish(f, 1 / 60, b);
+    expect(f.tx).toBe(400);
   });
 });
 

@@ -1,24 +1,29 @@
 import "./fishtank.css";
 import { h, s } from "../shared/dom";
 import { ALL_ART, FLOOR_ART, spriteSheet, useSvg, type FishId } from "./art";
-import { scareFish, scareWalker, stepFish, stepWalker, type Bounds, type FloorKind, type Fish, type Walker } from "./sim";
+import { isOffscreen, newTarget, scareFish, scareWalker, sendAway, stepFish, stepWalker, type Bounds, type FloorKind, type Fish, type Walker } from "./sim";
 
 /** Fish Tank: a touch toy. Tap or drag and nearby fish dart away; crabs, starfish and hermit crabs walk the sand.
  *  Everything is drawn in code. No sound, no storage, no network. */
 
-type Spec = { id: FishId; width: number; count: number; upright?: boolean; school?: boolean };
+type Spec = { id: FishId; width: number; count: number; weight: number; upright?: boolean; school?: boolean };
+// How often each kind turns up. Rarer kinds are picked less often, so they take longer to show up.
+const COMMON = 10, UNCOMMON = 7, RARE = 4, VERY_RARE = 2, LEGENDARY = 1.2;
 // width is a fraction of the shorter screen side, so fish are a sensible size on a phone or a tablet
 const ROSTER: Spec[] = [
-  { id: "minnows", width: 0.1, count: 8, school: true },
-  { id: "tetra", width: 0.085, count: 7, school: true },
-  { id: "butterflyfish", width: 0.2, count: 2 }, { id: "angelfish", width: 0.16, count: 2 },
-  { id: "pufferfish", width: 0.18, count: 1 }, { id: "boxfish", width: 0.16, count: 1 }, { id: "lionfish", width: 0.22, count: 1 },
-  { id: "seahorse", width: 0.11, count: 2, upright: true }, { id: "jellyfish", width: 0.15, count: 2, upright: true },
-  { id: "octopus", width: 0.18, count: 1, upright: true }, { id: "squid", width: 0.3, count: 1 }, { id: "anglerfish", width: 0.22, count: 1 },
-  { id: "turtle", width: 0.3, count: 1 }, { id: "dolphin", width: 0.38, count: 1 }, { id: "swordfish", width: 0.42, count: 1 },
-  { id: "hammerhead", width: 0.42, count: 1 }, { id: "orca", width: 0.5, count: 1 }, { id: "manta", width: 0.42, count: 1 },
-  { id: "whaleshark", width: 0.5, count: 1 },
+  { id: "minnows", width: 0.1, count: 6, weight: COMMON, school: true },
+  { id: "tetra", width: 0.085, count: 6, weight: COMMON, school: true },
+  { id: "butterflyfish", width: 0.2, count: 1, weight: COMMON }, { id: "angelfish", width: 0.16, count: 1, weight: COMMON }, { id: "boxfish", width: 0.16, count: 1, weight: COMMON },
+  { id: "pufferfish", width: 0.18, count: 1, weight: UNCOMMON }, { id: "lionfish", width: 0.22, count: 1, weight: UNCOMMON }, { id: "squid", width: 0.3, count: 1, weight: UNCOMMON },
+  { id: "seahorse", width: 0.11, count: 1, weight: RARE, upright: true }, { id: "jellyfish", width: 0.15, count: 1, weight: RARE, upright: true },
+  { id: "octopus", width: 0.18, count: 1, weight: RARE, upright: true }, { id: "anglerfish", width: 0.22, count: 1, weight: RARE },
+  { id: "turtle", width: 0.3, count: 1, weight: VERY_RARE }, { id: "dolphin", width: 0.38, count: 1, weight: VERY_RARE }, { id: "swordfish", width: 0.42, count: 1, weight: VERY_RARE },
+  { id: "hammerhead", width: 0.42, count: 1, weight: VERY_RARE }, { id: "manta", width: 0.42, count: 1, weight: VERY_RARE },
+  { id: "orca", width: 0.5, count: 1, weight: LEGENDARY }, { id: "whaleshark", width: 0.5, count: 1, weight: LEGENDARY },
 ];
+/** Only a few are in the tank at once: one school plus a handful of others, with at most two big ones. They swim in, stay a while, swim off, and are replaced. */
+const SINGLES = 8, MAX_BIG = 2, BIG = 0.38;
+const STAY: [number, number] = [40, 90], GAP: [number, number] = [3, 10];
 const FLOOR: { kind: FloorKind; width: number; count: number; walk: number; run: number }[] = [
   { kind: "crab", width: 0.2, count: 2, walk: 0.1, run: 7 },
   { kind: "starfish", width: 0.13, count: 2, walk: 0.02, run: 5 },
@@ -29,6 +34,7 @@ const SVGNS = "http://www.w3.org/2000/svg";
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
+type Slot = { school: boolean; views: FishView[]; spec?: Spec; phase: "in" | "present" | "out" | "gone"; timer: number };
 type FishView = { f: Fish; el: HTMLElement; w: number; h: number; dir: 1 | -1; angle: number; phase: number };
 type WalkView = { c: Walker; el: HTMLElement; w: number; h: number };
 
@@ -46,7 +52,7 @@ function start() {
   app.replaceChildren(spriteSheet(), tank);
 
   let W = 0, H = 0, S = 0, bounds: Bounds = { w: 0, h: 0, floorTop: 0 };
-  let fish: FishView[] = [], walkers: WalkView[] = [];
+  let slots: Slot[] = [], walkers: WalkView[] = [];
 
   function build() {
     W = tank.clientWidth; H = tank.clientHeight; S = Math.min(W, H);
@@ -63,27 +69,10 @@ function start() {
     const rock = (x: number, w: number, c: string) => h("div", { class: "deco", style: `left:${x}%;bottom:7%;width:${w * S}px;height:${w * S * 0.6}px;background:${c};border-radius:50% 50% 40% 40% / 70% 70% 30% 30%` });
     tank.append(rock(6, 0.22, "#7d8c96"), rock(72, 0.28, "#8b9aa4"), rock(80, 0.16, "#6c7b85"));
 
-    // fish
-    fish = [];
-    for (const spec of ROSTER) {
-      const art = ALL_ART[spec.id];
-      const w = spec.width * S, hgt = w * (art.h / art.w);
-      const cruise = S * (0.15 - 0.12 * spec.width) * (reduce ? 0.6 : 1);
-      const leaderIndex = fish.length;
-      for (let i = 0; i < spec.count; i++) {
-        const el = h("div", { class: "fish", style: `width:${w}px;height:${hgt}px;z-index:${Math.round(1000 - w)}` }, useSvg(spec.id, art));
-        tank.append(el);
-        const f: Fish = {
-          x: rnd(w, W - w), y: rnd(hgt, bounds.floorTop - hgt), vx: 0, vy: 0, cruise: cruise * rnd(0.85, 1.15),
-          half: { w: w / 2, h: hgt / 2 }, tx: 0, ty: 0, retarget: rnd(0, 3), upright: !!spec.upright,
-        };
-        if (spec.school && i > 0) f.follow = { leader: leaderIndex, dx: rnd(-w * 1.6, w * 1.6), dy: rnd(-w * 0.9, w * 0.9) };
-        else stepFish(f, 0, bounds);
-        fish.push({ f, el, w, h: hgt, dir: Math.random() < 0.5 ? 1 : -1, angle: 0, phase: rnd(0, 6.28) });
-      }
-    }
-    // keep followers near their leader at the start
-    for (const v of fish) if (v.f.follow) { const l = fish[v.f.follow.leader]!.f; v.f.x = l.x + v.f.follow.dx; v.f.y = Math.min(bounds.floorTop - v.h, Math.max(v.h, l.y + v.f.follow.dy)); }
+    // fish: slots that fish swim in and out of
+    for (const sl of slots) for (const v of sl.views) v.el.remove();
+    slots = [{ school: true, views: [], phase: "gone", timer: 0 }, ...Array.from({ length: SINGLES }, () => ({ school: false, views: [], phase: "gone" as const, timer: 0 }))];
+    for (const sl of slots) spawn(sl, true);
 
     // floor creatures
     walkers = [];
@@ -106,6 +95,57 @@ function start() {
     tank.append(kelp(12, 0.5, "#3f8f6a", -1), kelp(16, 0.34, "#58a77c", -3), kelp(60, 0.42, "#3f8f6a", -2), kelp(92, 0.55, "#4d9f75", -4), kelp(88, 0.3, "#58a77c", -5));
   }
 
+  function pickSpec(school: boolean): Spec {
+    const active = slots.filter((sl) => sl.spec).map((sl) => sl.spec!);
+    const bigNow = active.filter((a) => !a.school && a.width >= BIG).length;
+    let pool = ROSTER.filter((r) => !!r.school === school && !active.some((a) => a.id === r.id));
+    if (!school) pool = pool.filter((r) => r.width < BIG || bigNow < MAX_BIG);
+    if (!pool.length) pool = ROSTER.filter((r) => !!r.school === school);
+    let roll = Math.random() * pool.reduce((n, r) => n + r.weight, 0);
+    for (const r of pool) { roll -= r.weight; if (roll <= 0) return r; }
+    return pool[pool.length - 1]!;
+  }
+
+  /** Put a new kind of fish in a slot: already swimming (at load) or arriving from a side of the screen. */
+  function spawn(slot: Slot, onscreen: boolean) {
+    const spec = pickSpec(slot.school);
+    const art = ALL_ART[spec.id];
+    const w = spec.width * S, hgt = w * (art.h / art.w);
+    const cruise = S * (0.15 - 0.12 * spec.width) * (reduce ? 0.6 : 1);
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const bx = onscreen ? rnd(w, W - w) : side < 0 ? -w * 1.2 : W + w * 1.2;
+    const by = rnd(hgt, Math.max(hgt + 1, bounds.floorTop - hgt));
+    slot.spec = spec; slot.views = [];
+    for (let i = 0; i < spec.count; i++) {
+      const el = h("div", { class: "fish", style: `width:${w}px;height:${hgt}px;z-index:${Math.round(1000 - w)}` }, useSvg(spec.id, art));
+      tank.append(el);
+      const f: Fish = { x: bx, y: by, vx: 0, vy: 0, cruise: cruise * rnd(0.85, 1.15), half: { w: w / 2, h: hgt / 2 }, tx: bx, ty: by, retarget: rnd(1, 4), upright: !!spec.upright };
+      if (spec.school && i > 0) {
+        const dx = rnd(-w * 1.6, w * 1.6), dy = rnd(-w * 0.9, w * 0.9);
+        f.follow = { leader: 0, dx, dy };
+        f.x = bx + dx + (onscreen ? 0 : side * Math.abs(dx)); f.y = Math.min(bounds.floorTop - hgt, Math.max(hgt, by + dy));
+      } else newTarget(f, bounds);
+      if (!onscreen) { f.mode = "in"; f.vx = -side * cruise; }
+      slot.views.push({ f, el, w, h: hgt, dir: onscreen ? (Math.random() < 0.5 ? 1 : -1) : side < 0 ? 1 : -1, angle: 0, phase: rnd(0, 6.28) });
+    }
+    slot.phase = onscreen ? "present" : "in";
+    slot.timer = onscreen ? rnd(8, STAY[1]) : rnd(...STAY);
+  }
+
+  function lifecycle(slot: Slot, dt: number) {
+    if (slot.phase === "in" && slot.views[0] && !slot.views[0].f.mode) slot.phase = "present";
+    else if (slot.phase === "present") {
+      slot.timer -= dt;
+      if (slot.timer <= 0) { slot.phase = "out"; for (const v of slot.views) sendAway(v.f, bounds); }
+    } else if (slot.phase === "out" && slot.views.every((v) => isOffscreen(v.f, bounds))) {
+      for (const v of slot.views) v.el.remove();
+      slot.views = []; slot.spec = undefined; slot.phase = "gone"; slot.timer = rnd(...GAP);
+    } else if (slot.phase === "gone") {
+      slot.timer -= dt;
+      if (slot.timer <= 0) spawn(slot, false);
+    }
+  }
+
   const floorY = (v: WalkView) => bounds.floorTop + (H - bounds.floorTop) * (0.18 + 0.62 * v.c.y);
   const radius = () => S * 0.6;
 
@@ -119,7 +159,7 @@ function start() {
   }
   function scare(x: number, y: number, strength: number) {
     const R = radius();
-    for (const v of fish) scareFish(v.f, x, y, R, strength);
+    for (const sl of slots) for (const v of sl.views) scareFish(v.f, x, y, R, strength);
     for (const v of walkers) scareWalker(v.c, x, y, R * 1.1, floorY(v));
   }
 
@@ -148,8 +188,11 @@ function start() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = now / 1000;
-    for (const v of fish) {
-      stepFish(v.f, dt, bounds, fish.map((x) => x.f));
+    for (const sl of slots) {
+      lifecycle(sl, dt);
+      const group = sl.views.map((x) => x.f);
+      for (const v of sl.views) {
+      stepFish(v.f, dt, bounds, group);
       if (Math.abs(v.f.vx) > v.f.cruise * 0.3) v.dir = v.f.vx >= 0 ? 1 : -1;
       const sp = Math.hypot(v.f.vx, v.f.vy);
       const wig = Math.sin(t * (4 + sp / v.f.cruise * 2) + v.phase) * Math.min(0.09, 0.03 + sp / v.f.cruise * 0.01);
@@ -157,6 +200,7 @@ function start() {
       v.angle += (want - v.angle) * Math.min(1, dt * 8);
       const bob = reduce ? 0 : Math.sin(t * 1.3 + v.phase) * 3;
       v.el.style.transform = `translate3d(${(v.f.x - v.w / 2).toFixed(1)}px,${(v.f.y - v.h / 2 + bob).toFixed(1)}px,0) rotate(${v.angle.toFixed(3)}rad) scaleX(${v.dir})`;
+      }
     }
     for (const v of walkers) {
       stepWalker(v.c, dt, bounds);
