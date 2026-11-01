@@ -1,0 +1,5 @@
+.lead { font-size: 20px; max-width: 46rem; margin: 12px 0 28px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+.tool { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.tool-head { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; }
+.tool p { margin: 0 0 12px; }

@@ -1,0 +1,17 @@
+{
+  "name": "Fish Tank",
+  "short_name": "Fish Tank",
+  "description": "Tap the screen and the fish swim away. Crabs and starfish walk on the sand.",
+  "start_url": "/fishtank/",
+  "scope": "/fishtank/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#123f5c",
+  "theme_color": "#123f5c",
+  "icons": [
+    { "src": "/fishtank/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/fishtank/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/fishtank/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
