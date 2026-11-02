@@ -1,6 +1,9 @@
 import "./fishtank.css";
 import { h, s } from "../shared/dom";
-import { ALL_ART, FLOOR_ART, spriteSheet, useSvg } from "./art";
+import { ALL_ART, FLOOR_ART, spriteSheet, useSvg, type FishId } from "./art";
+import { CYCLE_MINUTES, START_POSITION, isActiveIn, lightAt, phaseOf, positionAt, twilightAt, type Phase } from "./daynight";
+import { createGuide, guideIcon, type Entry } from "./guide";
+import { GLOWS, INFO } from "./species-info";
 import { FLOOR, ROSTER, type Spec } from "./roster";
 import { hasExited, newDrift, scareFish, scareWalker, sendAway, stepFish, stepWalker, walkerExited, type Bounds, type FloorKind, type Fish, type Walker } from "./sim";
 
@@ -33,7 +36,51 @@ function inlineSvg(kind: FloorKind): SVGElement {
 function start() {
   const app = document.getElementById("app")!;
   const tank = h("div", { class: "tank", role: "img", "aria-label": "A fish tank. Tap or drag on the screen and the fish swim away." });
+  const clockIcon = h("span", { class: "clock-icon" });
+  const clockText = h("span", {});
+  const clock = h("span", { class: "clock", role: "status" }, clockIcon, clockText);
+  const draw = (e: Entry): Node => (e.kind === "floor" ? inlineSvg(e.id as FloorKind) : useSvg(e.id, ALL_ART[e.id as FishId]));
   app.replaceChildren(spriteSheet(), tank);
+  const guide = createGuide(app, draw);
+  app.append(h("div", { class: "toolbar" }, clock, guide.button()));
+
+  // ---- day and night ----
+  const startedAt = performance.now();
+  // Optional, for trying it out: ?at=0.75 starts partway through the cycle (0 to 1), ?cycle=1 makes a cycle last 1 minute
+  const params = new URLSearchParams(location.search);
+  const num = (k: string) => { const v = params.get(k); const n = v === null || v === "" ? NaN : Number(v); return Number.isFinite(n) ? n : null; };
+  const cycleMs = Math.max(0.05, num("cycle") ?? CYCLE_MINUTES) * 60000;
+  const startPos = num("at") ?? START_POSITION;
+  const where = (now: number) => positionAt(now - startedAt, cycleMs, startPos);
+  let phase: Phase = phaseOf(where(startedAt));
+  let lastLook = -1e9;
+  let darkEl: HTMLElement, twilightEl: HTMLElement, raysEl: HTMLElement;
+  const PHASE_TEXT: Record<Phase, string> = { day: "Day", dusk: "Dusk", night: "Night", dawn: "Dawn" };
+  function paintClock() {
+    clockIcon.replaceChildren(guideIcon(phase === "day" ? "sun" : phase === "night" ? "moon" : "both", 18));
+    clockText.textContent = PHASE_TEXT[phase];
+    clock.setAttribute("aria-label", `It is ${PHASE_TEXT[phase].toLowerCase()} in the tank`);
+  }
+  /** Dim the water at night and warm it a little at dusk and dawn. */
+  function applyLook(now: number) {
+    if (now - lastLook < 200) return;
+    lastLook = now;
+    const pos = where(now), light = lightAt(pos);
+    if (darkEl) darkEl.style.opacity = ((1 - light) * 0.55).toFixed(3);
+    if (twilightEl) twilightEl.style.opacity = (twilightAt(pos) * 0.3).toFixed(3);
+    if (raysEl) raysEl.style.opacity = (0.55 * (0.25 + 0.75 * light)).toFixed(3);
+    tank.classList.toggle("is-night", light < 0.4);
+    const next = phaseOf(pos);
+    if (next !== phase) { phase = next; paintClock(); onPhaseChange(); }
+  }
+  /** When the light changes, animals that are not out in this phase head off, one at a time over the next little while. */
+  function onPhaseChange() {
+    for (const sl of slots) {
+      if (!sl.id || (sl.phase !== "in" && sl.phase !== "present")) continue;
+      if (!isActiveIn(INFO[sl.id]!.active, phase)) sl.timer = Math.min(sl.timer, rnd(3, 45));
+    }
+  }
+  paintClock();
 
   let W = 0, H = 0, S = 0, bounds: Bounds = { w: 0, h: 0, floorTop: 0 };
   let slots: Slot[] = [];
@@ -61,6 +108,7 @@ function start() {
     // scenery
     const rays = h("div", { class: "rays" });
     for (const [x, rot] of [[8, -12], [32, -8], [58, -14], [82, -9]] as const) rays.append(h("div", { class: "ray", style: `left:${x}%;transform:rotate(${rot}deg)` }));
+    raysEl = rays;
     tank.append(rays, h("div", { class: "sand" }), h("div", { class: "sand2" }));
     for (let i = 0; i < 6; i++) {
       const sz = rnd(6, 12);
@@ -83,6 +131,9 @@ function start() {
         s("path", { d: "M18 200 Q-4 150 18 110 Q40 70 14 30 Q12 14 22 0 Q30 40 30 80 Q8 120 30 160 Q30 184 24 200Z", fill: color }));
       return svg;
     };
+    darkEl = h("div", { class: "dark" }); twilightEl = h("div", { class: "twilight" });
+    tank.append(twilightEl, darkEl);
+    lastLook = -1e9;
     tank.append(kelp(12, 0.5, "#3f8f6a", -1), kelp(16, 0.34, "#58a77c", -3), kelp(60, 0.42, "#3f8f6a", -2), kelp(92, 0.55, "#4d9f75", -4), kelp(88, 0.3, "#58a77c", -5));
   }
 
@@ -91,12 +142,12 @@ function start() {
     const active = new Set(slots.map((sl) => sl.id));
     const bigNow = slots.filter((sl) => sl.big).length;
     const pool: (Pick & { weight: number })[] = [
-      ...ROSTER.filter((r) => !active.has(r.id) && (r.width < BIG || bigNow < MAX_BIG)).map((spec) => ({ type: "fish" as const, spec, weight: spec.weight })),
-      ...FLOOR.filter((f) => !active.has(f.kind)).map((spec) => ({ type: "floor" as const, spec, weight: spec.weight })),
+      ...ROSTER.filter((r) => !active.has(r.id) && isActiveIn(INFO[r.id]!.active, phase) && (r.width < BIG || bigNow < MAX_BIG)).map((spec) => ({ type: "fish" as const, spec, weight: spec.weight })),
+      ...FLOOR.filter((f) => !active.has(f.kind) && isActiveIn(INFO[f.kind]!.active, phase)).map((spec) => ({ type: "floor" as const, spec, weight: spec.weight })),
     ];
     let roll = Math.random() * pool.reduce((n, p) => n + p.weight, 0);
     for (const p of pool) { roll -= p.weight; if (roll <= 0) return p; }
-    return pool[pool.length - 1]!;
+    return pool[pool.length - 1] ?? { type: "fish", spec: ROSTER[0]! };// never empty in practice: "both" kinds are always allowed
   }
 
   /** Put something new in a slot: already there (at load) or arriving from a side of the screen. */
@@ -121,7 +172,7 @@ function start() {
       const by = rnd(hgt, Math.max(hgt + 1, bounds.floorTop - hgt));
       const heading: -1 | 1 = onscreen ? (Math.random() < 0.5 ? 1 : -1) : (-side as 1 | -1);
       for (let i = 0; i < spec.count; i++) {
-        const el = h("div", { class: "fish", style: `width:${w}px;height:${hgt}px;z-index:${Math.round(1000 - w)}` }, useSvg(spec.id, art));
+        const el = h("div", { class: GLOWS.has(spec.id) ? "fish glow" : "fish", style: `width:${w}px;height:${hgt}px;z-index:${Math.round(1000 - w)}` }, useSvg(spec.id, art));
         tank.append(el);
         const f: Fish = { x: bx, y: by, vx: heading * cruise, vy: 0, cruise: cruise * rnd(0.85, 1.15), half: { w: w / 2, h: hgt / 2 }, heading, ty: by, retarget: rnd(1, 4), upright: !!spec.upright };
         if (spec.school && i > 0) {
@@ -192,10 +243,27 @@ function start() {
     }
   }
 
+  /** Which kind of animal is under this spot, if any. */
+  function animalAt(x: number, y: number): string | null {
+    const pad = 10;
+    for (const sl of slots) {
+      for (const v of sl.views) if (Math.abs(x - v.f.x) <= v.w / 2 + pad && Math.abs(y - v.f.y) <= v.h / 2 + pad) return sl.id ?? null;
+      const wv = sl.walker;
+      if (wv) {
+        const sc = 0.85 + 0.3 * wv.c.y, fy = floorY(wv);
+        if (Math.abs(x - wv.c.x) <= (wv.w * sc) / 2 + pad && y >= fy - wv.h * sc - pad && y <= fy + pad) return sl.id ?? null;
+      }
+    }
+    return null;
+  }
+
   let lastDrag = 0, lastTap = 0;
   const TAP_FX_GAP = 80; // ms: faster taps still scare the fish, but only the first of each burst makes ripples, bubbles and a buzz
   tank.addEventListener("pointerdown", (e) => {
     const r = tank.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    // tapping an animal opens its page; tapping the water scares whatever is nearby
+    const hit = guide.isOpen() ? null : animalAt(x, y);
+    if (hit) { guide.open(hit); return; }
     scare(x, y, 1);
     const now = performance.now();
     if (now - lastTap < TAP_FX_GAP) return;
@@ -233,6 +301,7 @@ function start() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = now / 1000;
+    applyLook(now);
     updateTarget(dt);
     for (const sl of slots) {
       lifecycle(sl, dt);
