@@ -21,7 +21,7 @@ export type Fish = {
   exitX?: number;
 };
 
-export const FLEE_MULTIPLIER = 10; // top flee speed, as a multiple of cruise speed
+export const FLEE_MULTIPLIER = 4; // top flee speed, as a multiple of cruise speed (a gentle dart, not a panic)
 export const RELAX_PER_SECOND = 1.6; // how quickly a scared fish calms down
 
 const rand = (a: number, b: number, r: () => number) => a + (b - a) * r();
@@ -79,14 +79,15 @@ export function stepFish(f: Fish, dt: number, b: Bounds, fishes: Fish[] = [], r:
 export function scareFish(f: Fish, tx: number, ty: number, radius: number, strength = 1, r: () => number = Math.random): boolean {
   const dx = f.x - tx, dy = f.y - ty, d = Math.hypot(dx, dy);
   if (d > radius) return false;
-  const falloff = Math.max(0.35, Math.pow(1 - d / radius, 0.6));
+  const falloff = Math.max(0.2, Math.pow(1 - d / radius, 0.8));
   let ux: number, uy: number;
   if (d < 1) { const a = r() * Math.PI * 2; ux = Math.cos(a); uy = Math.sin(a); } else { ux = dx / d; uy = dy / d; }
   f.vx += ux * f.cruise * FLEE_MULTIPLIER * falloff * strength;
   f.vy += uy * f.cruise * FLEE_MULTIPLIER * falloff * strength * 0.6;
   const sp = Math.hypot(f.vx, f.vy), cap = f.cruise * FLEE_MULTIPLIER;
   if (sp > cap) { f.vx *= cap / sp; f.vy *= cap / sp; }
-  if (strength >= 1 && Math.abs(ux) > 0.3 && f.mode !== "out") f.heading = ux > 0 ? 1 : -1;
+  // only a fish that was really close turns toward the side it flees to and leaves; others just dart and carry on
+  if (strength >= 1 && falloff > 0.55 && Math.abs(ux) > 0.3 && f.mode !== "out") f.heading = ux > 0 ? 1 : -1;
   return true;
 }
 

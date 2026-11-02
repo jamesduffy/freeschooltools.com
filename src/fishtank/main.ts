@@ -1,31 +1,12 @@
 import "./fishtank.css";
 import { h, s } from "../shared/dom";
-import { ALL_ART, FLOOR_ART, spriteSheet, useSvg, type FishId } from "./art";
+import { ALL_ART, FLOOR_ART, spriteSheet, useSvg } from "./art";
+import { FLOOR, ROSTER, type Spec } from "./roster";
 import { hasExited, newDrift, scareFish, scareWalker, sendAway, stepFish, stepWalker, walkerExited, type Bounds, type FloorKind, type Fish, type Walker } from "./sim";
 
 /** Fish Tank: a touch toy. Tap or drag and nearby fish dart away; crabs, starfish and hermit crabs walk the sand.
  *  Everything is drawn in code. No sound, no storage, no network. */
 
-type Spec = { id: FishId; width: number; count: number; weight: number; upright?: boolean; school?: boolean };
-// How often each kind turns up. Rarer kinds are picked less often, so they take longer to show up.
-const COMMON = 10, UNCOMMON = 7, RARE = 4, VERY_RARE = 2, LEGENDARY = 1.2;
-// width is a fraction of the shorter screen side, so fish are a sensible size on a phone or a tablet
-const ROSTER: Spec[] = [
-  { id: "minnows", width: 0.1, count: 4, weight: COMMON, school: true },
-  { id: "tetra", width: 0.085, count: 4, weight: COMMON, school: true },
-  { id: "butterflyfish", width: 0.2, count: 1, weight: COMMON }, { id: "angelfish", width: 0.16, count: 1, weight: COMMON }, { id: "boxfish", width: 0.16, count: 1, weight: COMMON },
-  { id: "pufferfish", width: 0.18, count: 1, weight: UNCOMMON }, { id: "lionfish", width: 0.22, count: 1, weight: UNCOMMON }, { id: "squid", width: 0.3, count: 1, weight: UNCOMMON },
-  { id: "seahorse", width: 0.11, count: 1, weight: RARE, upright: true }, { id: "jellyfish", width: 0.15, count: 1, weight: RARE, upright: true },
-  { id: "octopus", width: 0.18, count: 1, weight: RARE, upright: true }, { id: "anglerfish", width: 0.22, count: 1, weight: RARE },
-  { id: "turtle", width: 0.3, count: 1, weight: VERY_RARE }, { id: "dolphin", width: 0.38, count: 1, weight: VERY_RARE }, { id: "swordfish", width: 0.42, count: 1, weight: VERY_RARE },
-  { id: "hammerhead", width: 0.42, count: 1, weight: VERY_RARE }, { id: "manta", width: 0.42, count: 1, weight: VERY_RARE },
-  { id: "orca", width: 0.5, count: 1, weight: LEGENDARY }, { id: "whaleshark", width: 0.5, count: 1, weight: LEGENDARY },
-];
-const FLOOR: { kind: FloorKind; width: number; walk: number; run: number; weight: number }[] = [
-  { kind: "crab", width: 0.2, walk: 0.1, run: 7, weight: 15 },
-  { kind: "starfish", width: 0.13, walk: 0.035, run: 5, weight: 15 },
-  { kind: "hermit", width: 0.16, walk: 0.045, run: 4, weight: 15 },
-];
 /** Between 3 and 6 things are in the tank at once, fish and sand creatures together (a school counts as one).
  *  The number drifts at random. Each thing swims or walks in from one side, crosses the tank in a straight line without turning
  *  around, leaves by the far side, and is replaced by something else a few seconds later. At most two big fish at a time. */
@@ -180,14 +161,25 @@ function start() {
   }
 
   const floorY = (v: WalkView) => bounds.floorTop + (H - bounds.floorTop) * (0.18 + 0.62 * v.c.y);
-  const radius = () => S * 0.6;
+  const radius = () => S * 0.4;
 
+  // Tap effects are capped, so a flurry of fast taps can never pile up hundreds of animated elements
+  const MAX_FX = { ripple: 4, bubble: 12 };
+  const liveFx = { ripple: 0, bubble: 0 };
+  function addFx(kind: "ripple" | "bubble", style: string) {
+    if (liveFx[kind] >= MAX_FX[kind]) return;
+    liveFx[kind]++;
+    const el = h("span", { class: kind, style });
+    let gone = false;
+    const done = () => { if (gone) return; gone = true; liveFx[kind]--; el.remove(); };
+    el.addEventListener("animationend", done, { once: true });
+    setTimeout(done, 1800); // in case the animation never finishes (for example, a tab that was hidden)
+    tank.append(el);
+  }
   function bubbles(x: number, y: number) {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       const sz = rnd(8, 18);
-      const b = h("span", { class: "bubble", style: `left:${x + rnd(-24, 24)}px;top:${y + rnd(-14, 14)}px;width:${sz}px;height:${sz}px;animation-delay:${i * 0.07}s` });
-      tank.append(b);
-      setTimeout(() => b.remove(), 1600);
+      addFx("bubble", `left:${x + rnd(-24, 24)}px;top:${y + rnd(-14, 14)}px;width:${sz}px;height:${sz}px;animation-delay:${i * 0.07}s`);
     }
   }
   function scare(x: number, y: number, strength: number) {
@@ -198,13 +190,16 @@ function start() {
     }
   }
 
-  let lastDrag = 0;
+  let lastDrag = 0, lastTap = 0;
+  const TAP_FX_GAP = 80; // ms: faster taps still scare the fish, but only the first of each burst makes ripples, bubbles and a buzz
   tank.addEventListener("pointerdown", (e) => {
     const r = tank.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-    tank.append(h("span", { class: "ripple", style: `left:${x}px;top:${y}px` }));
-    const rip = tank.lastElementChild; setTimeout(() => rip?.remove(), 800);
-    bubbles(x, y);
     scare(x, y, 1);
+    const now = performance.now();
+    if (now - lastTap < TAP_FX_GAP) return;
+    lastTap = now;
+    addFx("ripple", `left:${x}px;top:${y}px`);
+    bubbles(x, y);
     try { navigator.vibrate?.(8); } catch { /* not supported */ }
   });
   tank.addEventListener("pointermove", (e) => {
@@ -213,13 +208,26 @@ function start() {
     if (now - lastDrag < 60) return;
     lastDrag = now;
     const r = tank.getBoundingClientRect();
-    scare(e.clientX - r.left, e.clientY - r.top, 0.55);
+    scare(e.clientX - r.left, e.clientY - r.top, 0.35);
   });
   tank.addEventListener("contextmenu", (e) => e.preventDefault());
+  // keep a phone from zooming, scrolling or bouncing the page when tapped fast
+  for (const type of ["gesturestart", "gesturechange", "dblclick"]) document.addEventListener(type, (e) => e.preventDefault());
+  tank.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
 
   // ---- main loop ----
   let last = performance.now();
+  let frameErrors = 0;
   function frame(now: number) {
+    requestAnimationFrame(frame); // always schedule the next frame first, so one bad frame can never stop the tank
+    try { step(now); frameErrors = 0; }
+    catch {
+      // recover by rebuilding the tank; if that keeps failing, reload the page
+      if (++frameErrors > 5) { location.reload(); return; }
+      try { build(); } catch { /* try again next frame */ }
+    }
+  }
+  function step(now: number) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const t = now / 1000;
@@ -252,11 +260,17 @@ function start() {
       v.el.style.transform = `translate3d(${(v.c.x - v.w / 2).toFixed(1)}px,${(floorY(v) - v.h * sc).toFixed(1)}px,0) scale(${(sc * flip).toFixed(3)},${sc.toFixed(3)})`;
       v.el.style.transformOrigin = "50% 0";
     }
-    requestAnimationFrame(frame);
   }
 
   build();
   requestAnimationFrame((n) => { last = n; frame(n); });
+  // coming back to the app after it was hidden: carry on from now, and make sure the tank is still there
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    last = performance.now();
+    if (!tank.isConnected || !tank.querySelector(".sand")) build();
+  });
+  window.addEventListener("pageshow", () => { last = performance.now(); });
   let rt: number | undefined;
   window.addEventListener("resize", () => { window.clearTimeout(rt); rt = window.setTimeout(() => { if (tank.clientWidth !== W || tank.clientHeight !== H) build(); }, 200); });
 }

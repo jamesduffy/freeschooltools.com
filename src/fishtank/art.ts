@@ -1,6 +1,7 @@
 import { s } from "../shared/dom";
 import { ART as AQUARIUM_ART, type Art } from "../aquarium/art";
 import type { SpeciesId } from "../aquarium/config";
+import { MORE_ART, type MoreId } from "./art-more";
 
 /** Original flat vector art for the Fish Tank toy. All swimmers face right. No outlines.
  *  The first 8 species come from the Quiet Aquarium; the rest are drawn here. */
@@ -8,7 +9,7 @@ const INK = "#1d2b3a";
 const eye = (cx: number, cy: number, r = 3.6) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff"/><circle cx="${cx + r * 0.3}" cy="${cy}" r="${r * 0.55}" fill="${INK}"/>`;
 
 export type ExtraId = "angelfish" | "lionfish" | "boxfish" | "swordfish" | "hammerhead" | "dolphin" | "orca" | "octopus" | "squid" | "anglerfish" | "tetra";
-export type FishId = SpeciesId | ExtraId;
+export type FishId = SpeciesId | ExtraId | MoreId;
 
 const EXTRA: Record<ExtraId, Art> = {
   // Tall kite body with long trailing fins
@@ -94,7 +95,7 @@ const EXTRA: Record<ExtraId, Art> = {
     `<circle cx="36" cy="8.6" r="1.8" fill="#fff"/><circle cx="36.5" cy="8.6" r="1" fill="${INK}"/>` },
 };
 
-export const ALL_ART: Record<FishId, Art> = { ...AQUARIUM_ART, ...EXTRA };
+export const ALL_ART: Record<FishId, Art> = { ...AQUARIUM_ART, ...EXTRA, ...MORE_ART };
 export const FISH_IDS = Object.keys(ALL_ART) as FishId[];
 export const symbolId = (id: string) => `ft-sp-${id}`;
 

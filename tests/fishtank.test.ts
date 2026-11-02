@@ -61,16 +61,22 @@ describe("tapping", () => {
     const f = fish({ heading: 1 });
     expect(scareFish(f, 300, 200, 300)).toBe(true);
     expect(f.vx).toBeGreaterThan(0);
-    expect(speed(f)).toBeGreaterThan(f.cruise * 3);
+    expect(speed(f)).toBeGreaterThan(f.cruise * 2);
     expect(speed(f)).toBeLessThanOrEqual(f.cruise * FLEE_MULTIPLIER + 1e-9);
   });
   it("a tap turns the fish toward the side it flees to, so it keeps going and leaves", () => {
     const f = fish({ x: 300, heading: 1 });
-    scareFish(f, 400, 200, 300); // tap to its right: it flees left
+    scareFish(f, 400, 200, 300); // tap close to its right: it flees left
     expect(f.heading).toBe(-1);
-    run(f, 12);
+    run(f, 20);
     expect(hasExited(f, b)).toBe(true);
     expect(f.x).toBeLessThan(0);
+  });
+  it("a fish farther from the tap darts a little but keeps its heading", () => {
+    const f = fish({ x: 100, heading: 1 });
+    scareFish(f, 330, 200, 300); // inside the radius, but not close
+    expect(f.heading).toBe(1);
+    expect(f.vx).toBeLessThan(0);
   });
   it("a finger drag speeds fish up but does not change where they are heading", () => {
     const f = fish({ x: 300, heading: 1 });
