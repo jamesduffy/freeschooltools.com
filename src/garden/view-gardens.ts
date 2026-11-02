@@ -7,8 +7,8 @@ import { downloadText } from "./storage";
 import { themeFor, themeList } from "./theme";
 import { field, message, nextId, showErrors } from "./ui";
 
-export function previewFrame(themeId: string, total: number, goal: number): HTMLElement {
-  const sc = createScene(themeFor(themeId), { still: true });
+export function previewFrame(themeId: string, total: number, goal: number, seed?: string): HTMLElement {
+  const sc = createScene(themeFor(themeId), { still: true, seed });
   sc.update(total, goal);
   return h("div", { class: "preview-frame" }, sc.el);
 }
@@ -55,7 +55,7 @@ export function gardensView(root: HTMLElement, go: (hash: string) => void): void
       ? h("section", { class: "card" }, h("h2", {}, "No gardens yet"), h("p", {}, "Create one, set a class goal, and show it on the classroom screen."), h("a", { class: "btn primary", href: "#/new" }, "Create your first garden"))
       : h("ul", { class: "cards" }, ...gardens.map((g) => h("li", {}, h("article", { class: "card g-card" },
         h("a", { class: "open", href: `#/garden/${g.id}`, "aria-label": `Open ${g.name}: ${progressText(g.total, g.goal, g.unit)}` },
-          previewFrame(g.theme, g.total, g.goal),
+          previewFrame(g.theme, g.total, g.goal, g.id),
           h("div", { class: "body" }, h("h2", {}, g.name), h("p", { class: "big", style: "margin:0" }, progressText(g.total, g.goal, g.unit)))))))));
 }
 

@@ -8,9 +8,9 @@ export type Entry = GuideEntry & { kind: "fish" | "floor" };
 export function buildEntries(): Entry[] {
   const mk = (id: string, kind: "fish" | "floor", weight: number): Entry => {
     const f = INFO[id]!;
-    return { id, kind, rank: weight, rarity: rarityLabel(weight), name: f.name, sci: f.sci, text: f.text, active: f.active,
+    return { id, kind, order: weight, rarity: rarityLabel(weight), name: f.name, sci: f.sci, text: f.text, active: f.active,
       facts: [["Size", f.size], ["Lives in", f.habitat], ["Eats", f.diet]] };
   };
   return [...ROSTER.map((r) => mk(r.id, "fish", r.weight)), ...FLOOR.map((f) => mk(f.kind, "floor", f.weight))]
-    .sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name));
+    .sort((a, b) => b.order - a.order || a.name.localeCompare(b.name));
 }

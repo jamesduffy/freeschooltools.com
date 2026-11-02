@@ -1,7 +1,7 @@
 import "../shared/styles.css";
 import "./garden.css";
 import { h } from "../shared/dom";
-import { banner, footerText, logo } from "../shared/chrome";
+import { footerText, logo } from "../shared/chrome";
 import { boot, getStatus, subscribe } from "./state";
 import { gardenView } from "./view-garden";
 import { gardensView, newGardenView } from "./view-gardens";
@@ -17,7 +17,6 @@ const nav = h("nav", { class: "nav", "aria-label": "Main" },
   ...[["#/", "Gardens"], ["#/shelf", "Shelf"]].map(([href, text]) => h("a", { href, "data-nav": href }, text)));
 const main = h("main", { class: "wrap", id: "main" });
 const chrome = [
-  banner("Prototype. Saved in this browser only. Do not put student names in garden names."),
   h("header", { class: "site-header" }, h("div", { class: "wrap" }, h("a", { class: "brand", href: "#/" }, logo(), h("span", {}, "Class Garden")), nav)),
 ];
 const footer = h("footer", { class: "site-footer" }, h("p", {}, footerText()), h("p", {}, h("a", { href: "/" }, "More free school tools")));

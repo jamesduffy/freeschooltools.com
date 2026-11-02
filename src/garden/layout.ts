@@ -2,8 +2,16 @@
 
 export const W = 1600;
 export const H = 900;
-export type FlowerType = "daisy" | "sunflower" | "tulip" | "bell";
-export const FLOWER_TYPES: FlowerType[] = ["daisy", "sunflower", "tulip", "bell"];
+export type FlowerType =
+  | "daisy" | "sunflower" | "tulip" | "bell"
+  | "poppy" | "daffodil" | "cosmos" | "lavender" | "rose" | "iris"
+  | "moonflower" | "eveningprimrose" | "nightjasmine" | "cereus";
+export const FLOWER_TYPES: FlowerType[] = [
+  "daisy", "sunflower", "tulip", "bell", "poppy", "daffodil", "cosmos", "lavender", "rose", "iris",
+  "moonflower", "eveningprimrose", "nightjasmine", "cereus",
+];
+/** The original four, used when a scene is drawn without a garden of its own (for example the New garden preview). */
+export const ORIGINAL_FLOWERS: FlowerType[] = ["daisy", "sunflower", "tulip", "bell"];
 
 /** Stem height and the rough head radius for each type, in scene units. */
 export const TYPE_INFO: Record<FlowerType, { stem: number; head: number }> = {
@@ -11,6 +19,16 @@ export const TYPE_INFO: Record<FlowerType, { stem: number; head: number }> = {
   sunflower: { stem: 205, head: 56 },
   tulip: { stem: 140, head: 36 },
   bell: { stem: 130, head: 34 },
+  poppy: { stem: 150, head: 38 },
+  daffodil: { stem: 150, head: 40 },
+  cosmos: { stem: 175, head: 42 },
+  lavender: { stem: 135, head: 30 },
+  rose: { stem: 150, head: 36 },
+  iris: { stem: 170, head: 44 },
+  moonflower: { stem: 160, head: 48 },
+  eveningprimrose: { stem: 160, head: 38 },
+  nightjasmine: { stem: 145, head: 36 },
+  cereus: { stem: 190, head: 56 },
 };
 
 export type Plant = {
@@ -36,9 +54,10 @@ const K = 1.5;
 
 const bandOf = (slot: number) => (Math.floor(slot / 2) % 2 === 0 ? "back" : "front");
 
-export function plantLayout(spot: number): Plant {
+/** `kinds` is the flower picked for each of the 12 spots (see chooseFlowers). Without it, the original four are used. */
+export function plantLayout(spot: number, kinds?: readonly FlowerType[]): Plant {
   const slot = SLOT_OF_SPOT[spot] ?? 0;
-  const type = FLOWER_TYPES[slot % 4] as FlowerType;
+  const type = kinds?.[spot] ?? (ORIGINAL_FLOWERS[slot % 4] as FlowerType);
   const back = bandOf(slot) === "back";
   const scale = (back ? 0.88 : 1) * (HEIGHT_VARIATION[spot] ?? 1) * K;
   return {
@@ -55,7 +74,7 @@ export function plantLayout(spot: number): Plant {
 }
 
 /** Bonus blooms sit in the gaps along the front edge, a little smaller so they do not hide the others. */
-const BONUS_TYPES: FlowerType[] = ["sunflower", "daisy", "tulip"];
+const BONUS_TYPES: FlowerType[] = ["rose", "moonflower", "cereus"];
 export function bonusLayout(k: number): Plant {
   const type = BONUS_TYPES[k % 3] as FlowerType;
   const scale = 0.72 * K;
@@ -69,15 +88,15 @@ export function bonusLayout(k: number): Plant {
   };
 }
 
-export const plants = (n = 12): Plant[] => Array.from({ length: n }, (_, i) => plantLayout(i));
+export const plants = (n = 12, kinds?: readonly FlowerType[]): Plant[] => Array.from({ length: n }, (_, i) => plantLayout(i, kinds));
 
 /** Top of a fully grown plant, where its flower head sits. */
 export const headPos = (p: Plant): { x: number; y: number } => ({ x: p.x, y: p.y - p.stem });
 
 /** The plant with the biggest bloom. The hummingbird stays near it. */
-export function largestBloom(): Plant {
-  let best = plantLayout(0);
-  for (const p of plants()) if (TYPE_INFO[p.type].head * p.scale + p.stem * 0.001 > TYPE_INFO[best.type].head * best.scale + best.stem * 0.001) best = p;
+export function largestBloom(kinds?: readonly FlowerType[]): Plant {
+  let best = plantLayout(0, kinds);
+  for (const p of plants(12, kinds)) if (TYPE_INFO[p.type].head * p.scale + p.stem * 0.001 > TYPE_INFO[best.type].head * best.scale + best.stem * 0.001) best = p;
   return best;
 }
 
@@ -97,8 +116,8 @@ export type CritterPlan = {
 };
 
 /** One entry per creature in the order they arrive. Positions follow the layout of fully grown plants. */
-export function critterPlans(kind: string, count: number): CritterPlan[] {
-  const hp = (i: number) => headPos(plantLayout(i));
+export function critterPlans(kind: string, count: number, kinds?: readonly FlowerType[]): CritterPlan[] {
+  const hp = (i: number) => headPos(plantLayout(i, kinds));
   if (kind === "ladybug") {
     return [0, 2].slice(0, count).map((host, n) => ({ kind, x: 0, y: 0, flip: 1 as const, host, fx: n === 0 ? -1500 : 1700, fy: -240, dur: 21 + n * 6, delay: -n * 9 }));
   }
@@ -116,9 +135,33 @@ export function critterPlans(kind: string, count: number): CritterPlan[] {
     });
   }
   if (kind === "hummingbird") {
-    const p = hp(largestBloom().index);
+    const p = hp(largestBloom(kinds).index);
     const right = p.x < 800;
     return [{ kind, x: p.x + (right ? 112 : -112), y: p.y + 4, flip: (right ? 1 : -1) as 1 | -1, fx: right ? 1500 : -1500, fy: -420, dur: 7, delay: 0 }].slice(0, count);
   }
-  return [];
+  return newCritterPlans(kind, count, hp);
+}
+
+const FROM_LEFT = -1500, FROM_RIGHT = 1700;
+const side = (n: number) => (n % 2 === 0 ? FROM_LEFT : FROM_RIGHT);
+
+/** Plans for the newer creatures. Ground walkers cross the soil and turn around; fliers loop through the sky; fireflies drift low over the plants. */
+function newCritterPlans(kind: string, count: number, hp: (i: number) => { x: number; y: number }): CritterPlan[] {
+  const one = (p: Omit<CritterPlan, "kind">): CritterPlan[] => [{ kind, ...p }].slice(0, count);
+  const many = (n: number, f: (i: number) => Omit<CritterPlan, "kind">): CritterPlan[] => Array.from({ length: Math.min(n, count) }, (_, i) => ({ kind, ...f(i) }));
+  switch (kind) {
+    case "caterpillar": return one({ x: 280, y: 872, flip: 1, tx: 190, fx: FROM_LEFT, fy: 0, dur: 46, delay: 0 });
+    case "snail": return one({ x: 1180, y: 874, flip: 1, tx: -150, fx: FROM_RIGHT, fy: 0, dur: 80, delay: -20 });
+    case "robin": return one({ x: 560, y: 862, flip: 1, tx: 300, fx: FROM_LEFT, fy: -200, dur: 28, delay: -6 });
+    case "rabbit": return one({ x: 1390, y: 852, flip: 1, tx: -420, fx: FROM_RIGHT, fy: 0, dur: 38, delay: -12 });
+    case "frog": return one({ x: 900, y: 878, flip: 1, tx: 170, fx: FROM_LEFT, fy: 0, dur: 32, delay: -9 });
+    case "hedgehog": return one({ x: 110, y: 864, flip: 1, tx: 300, fx: FROM_LEFT, fy: 0, dur: 64, delay: -30 });
+    case "dragonfly": return one({ x: 640, y: 330, flip: 1, tx: 300, ty: -50, fx: FROM_LEFT, fy: -300, dur: 17, delay: -3 });
+    case "moth": return many(2, (n) => ({ x: n === 0 ? 520 : 1090, y: n === 0 ? 330 : 270, flip: (n === 0 ? 1 : -1) as 1 | -1, fx: side(n), fy: -300, dur: 26 + n * 6, delay: -n * 10, color: n === 0 ? "#B9AFA0" : "#D6C8B0" }));
+    case "firefly": return many(3, (n) => ({ x: [430, 860, 1240][n]!, y: [610, 540, 640][n]!, flip: 1 as const, fx: side(n), fy: -200, dur: 15 + n * 4, delay: -n * 6 }));
+    case "bat": return many(2, (n) => ({ x: n === 0 ? 420 : 1180, y: n === 0 ? 170 : 240, flip: (n === 0 ? 1 : -1) as 1 | -1, tx: n === 0 ? 420 : -380, ty: 70, fx: side(n), fy: -200, dur: 22 + n * 9, delay: -n * 8 }));
+    case "owl": return one({ x: 760, y: 300, flip: 1, tx: 440, ty: 60, fx: FROM_RIGHT, fy: -300, dur: 46, delay: -10 });
+    case "bluebird": return one({ x: 340, y: 400, flip: -1, tx: 520, ty: 40, fx: FROM_LEFT, fy: -240, dur: 30, delay: -5 });
+    default: void hp; return [];
+  }
 }

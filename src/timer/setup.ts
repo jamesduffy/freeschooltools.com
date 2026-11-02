@@ -1,6 +1,6 @@
 import { h } from "../shared/dom";
 import { PALETTE, paletteHex, PALETTE_TEXT } from "../shared/palette";
-import { banner } from "../shared/chrome";
+import {  } from "../shared/chrome";
 import {
   addActivity, clampSlice, clampTotal, finishImport, formatClock, LIMITS, materializeFree, MESSAGES, moveActivity, newPlan, overBy,
   raiseTotal, removeActivity, shrinkToFit, slicesOf, splitEvenly, sumSeconds, leftover, type Activity, type Plan, type Result,
@@ -278,7 +278,6 @@ export function createSetup(hooks: Hooks) {
     h("div", { class: "start-box" }, startBtn, startWhy));
 
   root.append(
-    banner("Prototype. Saved in this browser only. Do not type student names."),
     h("header", { class: "site-header" }, h("div", { class: "wrap" },
       h("a", { class: "brand", href: "/timer/" }, "Classroom Pie Timer"),
       h("div", { class: "btn-row" }, h("a", { href: "/" }, "More free school tools"), settingsBtn))),

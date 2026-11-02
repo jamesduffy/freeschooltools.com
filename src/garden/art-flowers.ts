@@ -2,15 +2,13 @@
  *  Soft rounded shapes, a limited palette from the shared palette, and no outlines at all. */
 import { s } from "../shared/dom";
 import { paletteHex } from "../shared/palette";
+import { MORE_SYMBOL_IDS, moreSymbols } from "./art-more";
 
-export const ID = (name: string) => `cg-${name}`;
+import { COLORS, ID } from "./art-base";
+export { COLORS, ID };
 
 const PINK = paletteHex("pink"), CORAL = paletteHex("coral"), ORANGE = paletteHex("orange"), SUN = paletteHex("sun");
-const VIOLET = paletteHex("violet"), MINT = paletteHex("mint"), LIME = paletteHex("lime");
-export const COLORS = {
-  stem: "#4F9A52", leaf: LIME, leafDark: "#5BA84F", pinkDark: "#E57FB2", coralDark: "#E0695B", violetDark: "#9575D6",
-  brown: "#7A4A2B", brownDark: "#5E3A22", seed: "#A8703F", ink: "#27303B", red: "#D8483B",
-};
+const VIOLET = paletteHex("violet"), MINT = paletteHex("mint");
 
 type A = Record<string, string | number>;
 const g = (a: A, ...k: SVGElement[]) => s("g", a, ...k);
@@ -146,9 +144,9 @@ export function buildDefs(): SVGSVGElement {
     s("radialGradient", { id: ID("glow"), cx: "50%", cy: "58%", r: "70%" }, ...stops([[0, "#FFF7C2", 0.95], [55, "#FFE9A0", 0.5], [100, "#FFE9A0", 0]])),
     s("radialGradient", { id: ID("sunhalo"), cx: "50%", cy: "50%", r: "50%" }, ...stops([[0, "#FFF3B0", 0.9], [100, "#FFF3B0", 0]])),
     daisyBloom(), daisyBud(), sunflowerBloom(), sunflowerBud(), tulipBloom(), tulipBud(), bellBloom(), bellBud(),
-    leaf(), petal(), ladybug(), butterfly(), bee(), hummingbird());
+    leaf(), petal(), ladybug(), butterfly(), bee(), hummingbird(), ...moreSymbols());
   return s("svg", { width: 0, height: 0, "aria-hidden": "true", focusable: "false", style: "position:absolute", id: "cg-defs" }, defs) as SVGSVGElement;
 }
 
 /** The ids of the flower and creature symbols, for size checks. */
-export const SYMBOL_IDS = ["daisy-bloom", "daisy-bud", "sunflower-bloom", "sunflower-bud", "tulip-bloom", "tulip-bud", "bell-bloom", "bell-bud", "leaf", "petal", "ladybug", "butterfly", "bee", "hummingbird"].map(ID);
+export const SYMBOL_IDS = ["daisy-bloom", "daisy-bud", "sunflower-bloom", "sunflower-bud", "tulip-bloom", "tulip-bud", "bell-bloom", "bell-bud", "leaf", "petal", "ladybug", "butterfly", "bee", "hummingbird", ...MORE_SYMBOL_IDS].map(ID);

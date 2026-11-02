@@ -1,7 +1,7 @@
 import "../shared/styles.css";
 import "./iep.css";
 import { h } from "../shared/dom";
-import { banner, footerText, logo } from "../shared/chrome";
+import { footerText, logo } from "../shared/chrome";
 import { boot, firstRunSeen, flushSave, getBlocked, getStatus, markFirstRunSeen, subscribe } from "./state";
 import { downloadText, deleteAllToolKeys } from "./storage";
 import { icon } from "./ui";
@@ -24,7 +24,6 @@ const notice = h("div", { class: "wrap notice-wrap" });
 
 app.append(
   h("a", { class: "skip", href: "#main", onclick: (e: Event) => { e.preventDefault(); (main.querySelector("h1") as HTMLElement | null)?.focus(); } }, "Skip to content"),
-  banner("Prototype. Use fake data only. Saved in this browser only."),
   saveBanner,
   h("header", { class: "site-header no-print" }, h("div", { class: "wrap" },
     h("a", { class: "brand", href: "#/students" }, logo(), h("span", {}, "IEP Goal Toolkit")), nav, saved)),

@@ -25,24 +25,27 @@ describe("flowers scene", () => {
     const s = createScene(FLOWERS);
     expect(s.el.querySelectorAll(".cg-plant").length).toBe(15);
   });
+  const upTo = (pct: number) => FLOWERS.creatures.filter((c) => c.percent <= pct).reduce((n, c) => n + c.count, 0);
   it("shows creatures only from their milestone, and reports arrivals", () => {
     const s = createScene(FLOWERS);
     s.update(0, 100);
     expect(visible(s.el, ".cg-critter")).toBe(0);
-    expect(s.update(19, 100, { animate: true }).arrived).toEqual([]);
+    expect(s.update(9, 100, { animate: true }).arrived).toEqual([]);
+    expect(s.update(10, 100, { animate: true }).arrived).toEqual(["firefly"]);
+    expect(visible(s.el, ".cg-critter")).toBe(upTo(10));
+    expect(s.update(19, 100, { animate: true }).arrived).toEqual(["caterpillar"]);
     expect(s.update(20, 100, { animate: true }).arrived).toEqual(["ladybug"]);
-    expect(visible(s.el, ".cg-critter")).toBe(2);
-    expect(s.update(45, 100, { animate: true }).arrived).toEqual(["butterfly"]);
-    expect(s.update(65, 100, { animate: true }).arrived).toEqual(["bee"]);
-    expect(s.update(85, 100, { animate: true }).arrived).toEqual(["hummingbird"]);
-    expect(visible(s.el, ".cg-critter")).toBe(7);
+    expect(s.update(45, 100, { animate: true }).arrived).toContain("butterfly");
+    expect(s.update(65, 100, { animate: true }).arrived).toContain("bee");
+    expect(s.update(85, 100, { animate: true }).arrived).toEqual(["bat", "bluebird", "owl", "hummingbird"]);
+    expect(visible(s.el, ".cg-critter")).toBe(upTo(100));
     s.update(80, 100);
-    expect(visible(s.el, ".cg-critter")).toBe(6);
+    expect(visible(s.el, ".cg-critter")).toBe(upTo(80));
   });
   it("does not announce creatures that were already there on load", () => {
     const s = createScene(FLOWERS);
     expect(s.update(90, 100, { animate: true }).arrived).toEqual([]);
-    expect(visible(s.el, ".cg-critter")).toBe(7);
+    expect(visible(s.el, ".cg-critter")).toBe(upTo(90));
   });
   it("adds bonus blooms at 110, 125 and 150 percent", () => {
     const s = createScene(FLOWERS);
@@ -64,9 +67,10 @@ describe("flowers scene", () => {
   it("keeps moving elements under 60 even during the celebration", () => {
     const s = createScene(FLOWERS);
     s.update(200, 100); s.celebrate();
-    const moving = s.el.querySelectorAll(".cg-sway:not(.off *), .cg-cloud, .cg-rays, .cg-flap-x, .cg-flap-y, .cg-flap-r, .cg-loop, .cg-petal");
-    const critterInner = [...s.el.querySelectorAll(".cg-critter:not(.off) .cg-flap-x, .cg-critter:not(.off) .cg-flap-y, .cg-critter:not(.off) .cg-flap-r")].length;
-    const count = visible(s.el, ".cg-plant") + 3 + 1 + critterInner + visible(s.el, ".cg-critter") + s.el.querySelectorAll(".cg-petal").length;
+    const moving = s.el.querySelectorAll(".cg-sway:not(.off *):not(.rest *), .cg-cloud, .cg-rays, .cg-flap-x, .cg-flap-y, .cg-flap-r, .cg-loop:not(.rest *), .cg-petal");
+    const out = ".cg-critter:not(.off):not(.rest)";
+    const critterInner = [...s.el.querySelectorAll(`${out} .cg-flap-x, ${out} .cg-flap-y, ${out} .cg-flap-r`)].length;
+    const count = visible(s.el, ".cg-plant") + 3 + 1 + critterInner + s.el.querySelectorAll(out).length + s.el.querySelectorAll(".cg-petal").length;
     expect(count).toBeLessThan(60);
     expect(moving.length).toBeGreaterThan(0);
   });

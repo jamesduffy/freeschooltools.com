@@ -1,3 +1,8 @@
+import "../shared/guide.css";
+import { createDayNight } from "../shared/daynight-ui";
+import { createGuide } from "../shared/guide";
+import { drawEntry } from "./draw";
+import { gardenEntries } from "./kinds";
 import { h } from "../shared/dom";
 import { autoHideControls } from "../shared/idle-controls";
 import { isFullscreen, toggleFullscreen } from "../shared/fullscreen";
@@ -20,8 +25,18 @@ export function gardenView(root: HTMLElement, id: string, go: (hash: string) => 
     return () => {};
   }
   const theme = themeFor(first.theme);
-  const scene = createScene(theme);
+  const scene = createScene(theme, { seed: id });
   document.body.classList.add("garden-mode");
+
+  // day and night: the sky darkens, flowers open and close, and day and night creatures take turns
+  const dayNight = createDayNight({
+    onPhase: (p) => scene.setPhase(p),
+    onLight: (l) => scene.setLight(l, 4 * l * (1 - l)),
+    maxDark: 0, // the scene draws its own night, so the shared dark layer is not used
+  });
+  scene.setPhase(dayNight.phase());
+  scene.setLight(dayNight.light(), 0);
+  const dayNightTimer = window.setInterval(() => dayNight.tick(performance.now()), 250);
 
   // ---- text on the picture --------------------------------------------------------
   const nameEl = h("h1", { class: "name", tabindex: "-1" });
@@ -74,6 +89,15 @@ export function gardenView(root: HTMLElement, id: string, go: (hash: string) => 
 
   const stage = h("div", { class: "stage" }, scene.el, bar, pill, toast, celebrationHost, bar2, live);
   root.append(h("a", { class: "skip", href: "#", onclick: (e: Event) => { e.preventDefault(); nameEl.focus(); } }, "Skip to the garden"), stage);
+
+  // tap a flower or a creature to read about it; the Guide button opens everything
+  const guide = createGuide(stage, gardenEntries(theme), (e) => drawEntry(e.id), { title: "Garden guide", noun: "flowers and creatures", subtitle: (n) => `${n} kinds of flowers and creatures. Tap one to learn about it.` });
+  stage.append(h("div", { class: "toolbar cg-toolbar" }, dayNight.clock, guide.button()));
+  scene.el.addEventListener("pointerdown", (ev) => {
+    if (guide.isOpen()) return;
+    const kind = scene.kindAt(ev.target);
+    if (kind) guide.open(kind);
+  });
 
   // ---- drawing the current state ------------------------------------------------------
   let g: Garden = first;
@@ -206,6 +230,7 @@ export function gardenView(root: HTMLElement, id: string, go: (hash: string) => 
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("fullscreenchange", onFs);
     stopHide();
+    window.clearInterval(dayNightTimer);
     window.clearTimeout(toastTimer);
     void releaseAwake();
     document.body.classList.remove("garden-mode");

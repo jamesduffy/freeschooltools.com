@@ -1,5 +1,5 @@
 import { h, s } from "../shared/dom";
-import { banner, footerText, logo } from "../shared/chrome";
+import { footerText, logo } from "../shared/chrome";
 import { PALETTE } from "../shared/palette";
 import { EMOJI_SET, GROUP_LABELS, ICONS, searchIcons } from "./icons";
 import {
@@ -63,7 +63,6 @@ export function editView(root: HTMLElement): () => void {
     const sc = sch();
     const frag: Node[] = [
       h("a", { class: "skip", href: "#main", onclick: (e: Event) => { e.preventDefault(); (host.querySelector("h1") as HTMLElement | null)?.focus(); } }, "Skip to content"),
-      banner("Prototype. Do not put student names in schedules or labels. Saved in this browser only."),
       saveBanner,
       h("header", { class: "site-header" }, h("div", { class: "wrap" },
         h("a", { class: "brand", href: "/schedule/" }, logo(), h("span", {}, "Visual Schedule Board")),

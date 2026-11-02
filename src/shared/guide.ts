@@ -6,7 +6,7 @@ import type { Active } from "./daynight";
 export type GuideEntry = {
   id: string;
   rarity: string; // for example "Common" or "Legendary"
-  rank: number; // bigger sorts earlier (most common first)
+  order: number; // bigger sorts earlier (most common first)
   name: string;
   sci: string; // scientific or family name, shown in italics under the name
   text: string;
@@ -46,7 +46,7 @@ export type Guide = { open(id?: string): void; close(): void; isOpen(): boolean;
 export function createGuide(host: HTMLElement, entries: GuideEntry[] | (() => GuideEntry[]), draw: (e: GuideEntry) => Node, opts: { title?: string; noun?: string; subtitle?: (count: number) => string } = {}): Guide {
   const title = opts.title ?? "Species guide";
   const noun = opts.noun ?? "animals";
-  const load = () => [...(typeof entries === "function" ? entries() : entries)].sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name));
+  const load = () => [...(typeof entries === "function" ? entries() : entries)].sort((a, b) => b.order - a.order || a.name.localeCompare(b.name));
   let list: GuideEntry[] = load(); // read again each time the guide opens, for tools where the list grows
   const body = h("div", { class: "gd-body" });
   const root = h("div", { class: "gd", role: "dialog", "aria-modal": "true", "aria-label": title, hidden: true }, body);

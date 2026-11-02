@@ -36,8 +36,8 @@ describe("species information", () => {
     const e = buildEntries();
     expect(e.length).toBe(ids.length);
     expect(new Set(e.map((x) => x.id)).size).toBe(e.length);
-    for (let i = 1; i < e.length; i++) expect(e[i - 1]!.rank).toBeGreaterThanOrEqual(e[i]!.rank);
-    expect(e[e.length - 1]!.rank).toBeLessThan(2);
+    for (let i = 1; i < e.length; i++) expect(e[i - 1]!.order).toBeGreaterThanOrEqual(e[i]!.order);
+    expect(e[e.length - 1]!.order).toBeLessThan(2);
   });
   it("some day animals and some night animals can fill the tank at any time", async () => {
     const { isActiveIn } = await import("../src/shared/daynight");

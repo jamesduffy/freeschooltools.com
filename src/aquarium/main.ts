@@ -1,7 +1,7 @@
 import "../shared/styles.css";
 import "./aquarium.css";
 import { h } from "../shared/dom";
-import { banner, footerText, logo } from "../shared/chrome";
+import { footerText, logo } from "../shared/chrome";
 import { toggleFullscreen } from "../shared/fullscreen";
 import { autoHideControls } from "../shared/idle-controls";
 import { fishSvg, spriteSheet } from "./art";
@@ -57,7 +57,7 @@ function guideEntry(index: number): GuideEntry | null {
   const f = sp ? INFO[sp.id] : undefined;
   if (!sp || !f) return null;
   const mult = SESSION_MULTIPLIER[store.settings.session];
-  return { id: sp.id, rank: SPECIES.length - index, rarity: sp.rarity, name: f.name, sci: f.sci, text: f.text, active: f.active,
+  return { id: sp.id, order: SPECIES.length - index, rarity: sp.rarity, name: f.name, sci: f.sci, text: f.text, active: f.active,
     facts: [["Size", f.size], ["Lives in", f.habitat], ["Eats", f.diet], ["Arrives after", `${minutesText(sp.at * mult)} of calm`]] };
 }
 /** Only fish the class has found are in the guide. */
@@ -130,7 +130,6 @@ function focusSoon(el: HTMLElement | null) { window.setTimeout(() => el?.focus({
 function chrome(main: HTMLElement): HTMLElement[] {
   return [
     h("a", { class: "skip", href: "#main", onclick: (e: Event) => { e.preventDefault(); (main.querySelector("h1") as HTMLElement | null)?.focus(); } }, "Skip to content"),
-    banner("Prototype. Measures volume only. Nothing is recorded or sent anywhere."),
     h("header", { class: "site-header" }, h("div", { class: "wrap" },
       h("a", { class: "brand", href: "/" }, logo(), h("span", {}, "Quiet Aquarium")), statusPill())),
     main,

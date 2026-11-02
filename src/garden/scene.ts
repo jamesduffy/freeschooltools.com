@@ -1,9 +1,11 @@
 /** Builds the animated garden picture as SVG and updates it when the total changes. Growth is done with CSS transforms. */
 import { s } from "../shared/dom";
 import { paletteHex } from "../shared/palette";
+import { isActiveIn, type Active, type Phase } from "../shared/daynight";
 import { arrivedCreatures, bonusBlooms, bonusGrowth, plantShape, spotGrowths, SPOTS } from "./growth";
+import { FLOWER_INFO, GLOW_CREATURES, activeOfCreature, chooseFlowers } from "./kinds";
 import { COLORS, ID, buildDefs } from "./art-flowers";
-import { bonusLayout, critterPlans, H, TYPE_INFO, W, plantLayout, type CritterPlan, type Plant } from "./layout";
+import { bonusLayout, critterPlans, H, TYPE_INFO, W, plantLayout, type CritterPlan, type FlowerType, type Plant } from "./layout";
 import type { ThemeConfig } from "./theme";
 
 type A = Record<string, string | number>;
@@ -26,6 +28,12 @@ export type Scene = {
   /** Moves the picture to a new total. Pass animate: true to fly new creatures in. */
   update(total: number, goal: number, opts?: { animate?: boolean }): SceneChange;
   celebrate(): void;
+  /** How bright it is, 0 (full night) to 1 (full day), and how much dusk or dawn tint to show. Flowers open and close with the light. */
+  setLight(light: number, twilight: number): void;
+  /** Creatures that are out only by day or only at night rest while it is the other time. */
+  setPhase(phase: Phase): void;
+  /** What was tapped: "flower:rose", "creature:owl", or null. */
+  kindAt(target: EventTarget | null): string | null;
 };
 
 // ---- static backdrop --------------------------------------------------------------
@@ -43,7 +51,7 @@ function cloud(x: number, y: number, k: number, dur: number, delay: number): SVG
 
 function sun(): SVGElement {
   const rays = Array.from({ length: 12 }, (_, i) => s("rect", { x: -5, y: -118, width: 10, height: 34, rx: 5, fill: paletteHex("sun"), transform: `rotate(${i * 30})`, opacity: 0.85 }));
-  return g({ transform: "translate(1340 150)" },
+  return g({ transform: "translate(1340 150)", class: "cg-sun" },
     s("circle", { r: 170, fill: `url(#${ID("sunhalo")})` }),
     g({ class: "cg-rays" }, ...rays),
     s("circle", { r: 68, fill: "#FFD84A" }), s("circle", { r: 54, fill: "#FFE680" }));
@@ -65,7 +73,7 @@ function backdrop(): SVGElement[] {
 }
 
 // ---- one plant ----------------------------------------------------------------------
-type PlantView = { root: SVGElement; setGrowth(g: number): void; follow: SVGElement; stemLen: number };
+type PlantView = { root: SVGElement; setGrowth(g: number): void; setOpen(open: number): void; follow: SVGElement; stemLen: number; active: Active };
 
 function seedMarks(): SVGElement {
   return g({ class: "cg-seeds" },
@@ -81,15 +89,17 @@ function buildPlant(p: Plant, withHost: boolean): PlantView {
     use("leaf", { transform: `translate(0 ${-len * 0.5}) scale(-1 1) rotate(-18) scale(0.9)` }));
   const bud = g({ class: "cg-t" }, use(`${p.type}-bud`));
   const bloom = g({ class: "cg-t" }, use(`${p.type}-bloom`));
-  const head = g({ class: "cg-t" }, bud, bloom);
+  // an invisible tap area over the head, so a tap anywhere on the flower counts, not only on a painted petal
+  const head = g({ class: "cg-t" }, s("circle", { class: "cg-hit", r: TYPE_INFO[p.type].head * 1.15, fill: "rgba(0,0,0,0)" }), bud, bloom);
   const follow = g({ class: "cg-t" });
   const sway = style(g({ class: "cg-sway" }, stemG, ...(withHost ? [follow] : []), head), `--amp:${p.swayAmp}deg;animation-duration:${p.swayDur}s;animation-delay:${p.swayDelay}s`);
   const seeds = g({ class: "cg-t" }, seedMarks());
-  const root = g({ class: "cg-plant", transform: `translate(${p.x} ${p.y}) scale(${p.scale * f} ${p.scale})` }, seeds, sway);
-  return {
-    root, follow, stemLen: len,
-    setGrowth(gr: number) {
+  const root = g({ class: "cg-plant", "data-kind": `flower:${p.type}`, transform: `translate(${p.x} ${p.y}) scale(${p.scale * f} ${p.scale})` }, seeds, sway);
+  let curGrowth = 0, open = 1;
+  const apply = () => {
+      const gr = curGrowth;
       const sh = plantShape(gr);
+      sh.bloom *= open; // a flower that is closed for the day or night shows its bud
       stemG.style.transform = `scale(1, ${sh.stem})`;
       stemG.style.opacity = gr > 0 ? "1" : "0";
       head.style.transform = `translate(0px, ${-len * sh.stem}px) scale(${sh.headScale})`;
@@ -100,34 +110,51 @@ function buildPlant(p: Plant, withHost: boolean): PlantView {
       bud.style.transform = `scale(${1 - 0.25 * sh.bloom})`;
       seeds.style.opacity = String(Math.max(0, 1 - gr * 6));
       follow.style.transform = `translate(0px, ${-len * sh.stem * 0.55}px)`;
-    },
+  };
+  return {
+    root, follow, stemLen: len, active: FLOWER_INFO[p.type].active,
+    setGrowth(gr: number) { curGrowth = gr; apply(); },
+    setOpen(o: number) { if (Math.abs(o - open) > 0.01) { open = o; apply(); } },
   };
 }
 
 // ---- creatures ------------------------------------------------------------------------
-type CritterView = { kind: string; n: number; plan: CritterPlan; wrap: SVGElement; arrive: SVGElement; visible: boolean };
+type CritterView = { kind: string; n: number; plan: CritterPlan; wrap: SVGElement; arrive: SVGElement; visible: boolean; active: Active; glow: boolean };
+
+/** How big each newer creature is drawn. Ground walkers that hop get a little bounce while they walk. */
+const NEW_SCALE: Record<string, number> = { caterpillar: 0.95, snail: 0.85, robin: 0.9, dragonfly: 0.9, rabbit: 0.95, bluebird: 0.9, firefly: 1.25, moth: 1.05, frog: 0.95, hedgehog: 1, bat: 0.95, owl: 0.9 };
+const HOPPERS = new Set(["robin", "rabbit", "frog"]);
 
 function buildCritter(kind: string, n: number, plan: CritterPlan): CritterView {
   const art = (() => {
     if (kind === "ladybug") return use("ladybug", { transform: "translate(7 0) scale(1.15)" });
     if (kind === "butterfly") return style(use("butterfly", { transform: "scale(1.25)" }), `--w:${plan.color ?? "#F5A55B"};--w2:${plan.color === "#8CA6F2" ? "#B493EA" : "#F28B7D"}`);
     if (kind === "bee") return use("bee", { transform: "scale(1.4)" });
-    return use("hummingbird", { transform: "scale(0.95)" });
+    if (kind === "hummingbird") return use("hummingbird", { transform: "scale(0.95)" });
+    const sc = NEW_SCALE[kind] ?? 1;
+    const symbol = use(kind, { transform: `scale(${sc})` });
+    if (kind === "moth") return style(symbol, `--w:${plan.color ?? "#B9AFA0"}`);
+    if (kind === "firefly") return g({ class: "cg-pulse" }, symbol);
+    if (HOPPERS.has(kind)) return g({ class: "cg-bounce" }, symbol);
+    return symbol;
   })();
   const loop = style(g({ class: `cg-loop cg-${kind}` }, art), `animation-duration:${plan.dur}s;animation-delay:${plan.delay}s;--tx:${(plan.tx ?? 0) * plan.flip}px;--ty:${plan.ty ?? 0}px`);
   const arrive = style(g({ class: "cg-arrive" }, loop), `--fx:${plan.fx}px;--fy:${plan.fy}px`);
-  const wrap = plan.host !== undefined ? g({ class: "cg-critter off" }, arrive) : g({ class: "cg-critter off", transform: `translate(${plan.x} ${plan.y}) scale(${plan.flip} 1)` }, arrive);
-  return { kind, n, plan, wrap, arrive, visible: false };
+  const attrs = { class: "cg-critter off", "data-kind": `creature:${kind}` };
+  const wrap = plan.host !== undefined ? g(attrs, arrive) : g({ ...attrs, transform: `translate(${plan.x} ${plan.y}) scale(${plan.flip} 1)` }, arrive);
+  return { kind, n, plan, wrap, arrive, visible: false, active: activeOfCreature(kind), glow: GLOW_CREATURES.has(kind) };
 }
 
 // ---- the scene --------------------------------------------------------------------------
-export function createScene(theme: ThemeConfig, opts: { still?: boolean; label?: string } = {}): Scene {
+export function createScene(theme: ThemeConfig, opts: { still?: boolean; label?: string; seed?: string } = {}): Scene {
   ensureDefs();
   const plants: PlantView[] = [];
   const plantLayer = g({});
-  const layouts = Array.from({ length: SPOTS }, (_, i) => plantLayout(i));
+  // each garden gets its own mix of flowers; without a seed (the New garden preview) the original four are used
+  const kinds: FlowerType[] | undefined = opts.seed ? chooseFlowers(opts.seed) : undefined;
+  const layouts = Array.from({ length: SPOTS }, (_, i) => plantLayout(i, kinds));
   const critters: CritterView[] = [];
-  const plans = theme.creatures.map((c) => ({ c, plans: critterPlans(c.kind, c.count) }));
+  const plans = theme.creatures.map((c) => ({ c, plans: critterPlans(c.kind, c.count, kinds) }));
   const hostSpots = new Set(plans.flatMap(({ plans: ps }) => ps.map((pl) => pl.host).filter((h): h is number => h !== undefined)));
 
   const order = layouts.map((p, i) => ({ p, i })).sort((a, b) => a.p.y - b.p.y);
@@ -135,13 +162,23 @@ export function createScene(theme: ThemeConfig, opts: { still?: boolean; label?:
   const bonusViews = theme.bonus.map((_, k) => { const v = buildPlant(bonusLayout(k), false); v.root.classList.add("off"); plantLayer.append(v.root); return v; });
 
   const critterLayer = g({});
+  const glowLayer = g({}); // creatures that make their own light stay bright above the night
   for (const { c, plans: ps } of plans) {
     ps.forEach((plan, n) => {
       const cv = buildCritter(c.kind, n, plan);
       critters.push(cv);
-      if (plan.host !== undefined) plants[plan.host]!.follow.append(cv.wrap); else critterLayer.append(cv.wrap);
+      if (plan.host !== undefined) plants[plan.host]!.follow.append(cv.wrap); else (cv.glow ? glowLayer : critterLayer).append(cv.wrap);
     });
   }
+
+  // night: a dark layer over everything but the glowing creatures, with a moon and stars above it
+  const nightRect = s("rect", { class: "cg-night", width: W, height: H, fill: "#06142e", opacity: 0, "pointer-events": "none" });
+  const tint = s("rect", { class: "cg-tint", width: W, height: H, fill: "#FF8A50", opacity: 0, "pointer-events": "none" });
+  const stars = g({ class: "cg-stars", opacity: 0, "pointer-events": "none" },
+    ...Array.from({ length: 34 }, (_, i) => s("circle", { cx: (i * 197 + 61) % 1540 + 30, cy: (i * 113 + 40) % 330 + 20, r: i % 5 === 0 ? 3.2 : 2, fill: "#FFFBE6", opacity: i % 3 === 0 ? 0.95 : 0.65 })));
+  const moon = g({ class: "cg-moon", transform: "translate(300 170)", opacity: 0, "pointer-events": "none" },
+    s("circle", { r: 120, fill: "#DCE8FF", opacity: 0.12 }), s("circle", { r: 56, fill: "#F4F1DC" }),
+    s("circle", { cx: -16, cy: -12, r: 10, fill: "#DAD6BC" }), s("circle", { cx: 18, cy: 14, r: 14, fill: "#DAD6BC" }), s("circle", { cx: 14, cy: -26, r: 6, fill: "#DAD6BC" }));
 
   const glow = s("rect", { class: "cg-glow", width: W, height: H, fill: `url(#${ID("glow")})` });
   const petals = g({});
@@ -151,12 +188,13 @@ export function createScene(theme: ThemeConfig, opts: { still?: boolean; label?:
   },
     ...backdrop(), sun(),
     cloud(300, 130, 1, 80, -10), cloud(760, 215, 0.8, 100, -50), cloud(1010, 95, 0.9, 90, -30),
-    plantLayer, critterLayer, glow, petals) as SVGSVGElement;
+    tint, plantLayer, critterLayer, nightRect, glowLayer, stars, moon, glow, petals) as SVGSVGElement;
 
   let prevBonus = 0;
   let first = true;
   let celebrateTimer: number | undefined;
 
+  for (const c of critters) c.wrap.classList.toggle("rest", !isActiveIn(c.active, "day")); // daytime until told otherwise
   const scene: Scene = {
     el: svg,
     update(total, goal, o = {}) {
@@ -184,6 +222,24 @@ export function createScene(theme: ThemeConfig, opts: { still?: boolean; label?:
       prevBonus = nb;
       first = false;
       return { arrived: [...arrived], bonusAppeared };
+    },
+    setLight(light, twilight) {
+      nightRect.setAttribute("opacity", ((1 - light) * 0.62).toFixed(3));
+      tint.setAttribute("opacity", (twilight * 0.28).toFixed(3));
+      stars.setAttribute("opacity", Math.max(0, 1 - light * 1.4).toFixed(3));
+      moon.setAttribute("opacity", Math.max(0, 1 - light * 1.3).toFixed(3));
+      svg.querySelector(".cg-sun")?.setAttribute("opacity", Math.max(0, light * 1.2 - 0.1).toFixed(3));
+      // flowers that open by day close as the light goes; flowers that open at night open as it comes
+      const openness = (a: Active) => (a === "day" ? light : a === "night" ? 1 - light : 1);
+      for (const v of [...plants, ...bonusViews]) v.setOpen(openness(v.active));
+    },
+    setPhase(phase) {
+      for (const c of critters) c.wrap.classList.toggle("rest", !isActiveIn(c.active, phase));
+    },
+    kindAt(target) {
+      const el = target instanceof Element ? target.closest("[data-kind]") : null;
+      if (!el || el.classList.contains("rest")) return null;
+      return el.getAttribute("data-kind");
     },
     celebrate() {
       svg.classList.add("celebrating");

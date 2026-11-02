@@ -20,7 +20,7 @@ export function shelfView(root: HTMLElement, go: (hash: string) => void): void {
     shelf.length === 0
       ? h("section", { class: "card" }, h("p", { class: "empty" }, "Nothing on the shelf yet. When a class reaches its goal, you can move the garden here."))
       : h("ul", { class: "cards" }, ...shelf.map((g) => h("li", {}, h("article", { class: "card g-card" },
-        previewFrame(g.theme, g.total, g.goal),
+        previewFrame(g.theme, g.total, g.goal, g.id),
         h("div", { class: "body" },
           h("h2", {}, g.name),
           h("p", { class: "big", style: "margin:0" }, `Goal: ${fmt(g.goal)} ${g.unit}`),

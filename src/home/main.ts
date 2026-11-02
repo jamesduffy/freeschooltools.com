@@ -1,7 +1,7 @@
 import "../shared/styles.css";
 import "./home.css";
 import { h } from "../shared/dom";
-import { banner, footerText, logo } from "../shared/chrome";
+import { footerText, logo } from "../shared/chrome";
 import { SUGGESTION_FORM_URL, tools } from "../tools";
 
 const app = document.getElementById("app")!;
@@ -19,7 +19,6 @@ const suggest = h("article", { class: "card tool" },
   h("p", { class: "muted" }, "Please do not include student names or information."));
 
 app.append(
-  banner("Prototype site. Use fake data only."),
   h("header", { class: "site-header" }, h("div", { class: "wrap" },
     h("a", { class: "brand", href: "/" }, logo(), h("span", {}, "Free School Tools")))),
   h("main", { class: "wrap" },

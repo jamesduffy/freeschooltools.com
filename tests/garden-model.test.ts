@@ -68,25 +68,33 @@ describe("goals of 1 and 100000", () => {
 
 describe("creatures", () => {
   const at = (total: number, goal = 100) => arrivedCreatures(total, goal, FLOWERS.creatures);
-  it("arrive exactly at 20, 45, 65 and 85 percent and not before", () => {
+  it("every creature arrives exactly at its percent and not before", () => {
+    for (const c of FLOWERS.creatures) {
+      expect(at(c.percent - 1)[c.kind], c.kind).toBeUndefined();
+      expect(at(c.percent)[c.kind], c.kind).toBe(c.count);
+    }
     expect(at(0)).toEqual({});
-    expect(at(19)).toEqual({});
-    expect(at(20)).toEqual({ ladybug: 2 });
-    expect(at(44)).toEqual({ ladybug: 2 });
-    expect(at(45)).toEqual({ ladybug: 2, butterfly: 2 });
-    expect(at(64)).toEqual({ ladybug: 2, butterfly: 2 });
-    expect(at(65)).toEqual({ ladybug: 2, butterfly: 2, bee: 2 });
-    expect(at(84)).toEqual({ ladybug: 2, butterfly: 2, bee: 2 });
-    expect(at(85)).toEqual({ ladybug: 2, butterfly: 2, bee: 2, hummingbird: 1 });
+  });
+  it("the original four still arrive at 20, 45, 65 and 85 percent", () => {
+    const pct = (kind: string) => FLOWERS.creatures.find((c) => c.kind === kind)?.percent;
+    expect([pct("ladybug"), pct("butterfly"), pct("bee"), pct("hummingbird")]).toEqual([20, 45, 65, 85]);
+  });
+  it("are listed in order of arrival, each kind once", () => {
+    const ps = FLOWERS.creatures.map((c) => c.percent);
+    expect(ps).toEqual([...ps].sort((a, b) => a - b));
+    expect(new Set(FLOWERS.creatures.map((c) => c.kind)).size).toBe(FLOWERS.creatures.length);
+    expect(FLOWERS.creatures.length).toBe(16);
   });
   it("hold for other goals, with no rounding trouble", () => {
-    expect(at(99, 500)).toEqual({});
-    expect(at(100, 500)).toEqual({ ladybug: 2 });
-    expect(at(224, 500)).toEqual({ ladybug: 2 });
-    expect(at(225, 500)).toEqual({ ladybug: 2, butterfly: 2 });
+    expect(at(49, 500)).toEqual({}); // firefly is at 10 percent: 50 of 500
+    expect(at(50, 500)).toEqual({ firefly: 3 });
+    expect(at(100, 500).ladybug).toBe(2);
+    expect(at(99, 500).ladybug).toBeUndefined();
+    expect(at(225, 500).butterfly).toBe(2);
+    expect(at(224, 500).butterfly).toBeUndefined();
     expect(reached(7, 35, 20)).toBe(true);
     expect(reached(6, 35, 20)).toBe(false);
-    expect(Object.keys(at(1, 1)).length).toBe(4);
+    expect(Object.keys(at(1, 1)).length).toBe(FLOWERS.creatures.length);
   });
   it("bonus blooms appear at 110, 125 and 150 percent and then stop", () => {
     const b = (t: number) => bonusBlooms(t, 100, FLOWERS.bonus);
