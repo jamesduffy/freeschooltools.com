@@ -12,6 +12,10 @@ import { Mic } from "./mic";
 import { READ_INTERVAL_MS, Session } from "./session";
 import { loadStore, saveStore, type KV, type Store } from "./storage";
 import { Tank } from "./tank";
+import "../shared/guide.css";
+import { createGuide, type Guide, type GuideEntry } from "../shared/guide";
+import { createDayNight } from "../shared/daynight-ui";
+import { INFO } from "../fishtank/species-info";
 import { mountHomeLink } from "../shared/home-link";
 
 // ---- storage ----------------------------------------------------------------------
@@ -40,6 +44,28 @@ let lastTick = 0;
 let ticks = 0;
 let stopAutoHide: (() => void) | null = null;
 let lastScale = -1;
+
+// ---- day and night, and the species guide -------------------------------------------
+const dayNight = createDayNight({ onPhase: (p) => tank.setPhase(p) });
+dayNight.mount(tank.el);
+tank.setPhase(dayNight.phase());
+window.setInterval(() => dayNight.tick(performance.now()), 250);
+
+/** One guide entry for a kind of fish you have found. */
+function guideEntry(index: number): GuideEntry | null {
+  const sp = SPECIES[index];
+  const f = sp ? INFO[sp.id] : undefined;
+  if (!sp || !f) return null;
+  const mult = SESSION_MULTIPLIER[store.settings.session];
+  return { id: sp.id, rank: SPECIES.length - index, rarity: sp.rarity, name: f.name, sci: f.sci, text: f.text, active: f.active,
+    facts: [["Size", f.size], ["Lives in", f.habitat], ["Eats", f.diet], ["Arrives after", `${minutesText(sp.at * mult)} of calm`]] };
+}
+/** Only fish the class has found are in the guide. */
+const foundEntries = (): GuideEntry[] =>
+  SPECIES.map((sp, i) => (store.discovered.includes(sp.id) ? guideEntry(i) : null)).filter((e): e is GuideEntry => e !== null);
+const drawFish = (e: GuideEntry): Node => fishSvg(e.id);
+const makeGuide = (host: HTMLElement): Guide =>
+  createGuide(host, foundEntries, drawFish, { title: "Fish guide", noun: "fish", subtitle: (n) => `${n} of ${SPECIES.length} kinds found. Tap one to learn about it.` });
 
 session.onArrive = (i) => {
   const sp = SPECIES[i];
@@ -152,10 +178,13 @@ function paintCollection() {
     return h("li", { class: "card aq-item" },
       h("div", { class: `art ${found ? "" : "sil"}`, role: "img", "aria-label": found ? sp.name : "Fish not found yet" }, fishSvg(sp.id)),
       found
-        ? [h("h2", {}, sp.name), h("p", {}, h("span", { class: "tag" }, sp.rarity)), h("p", {}, sp.fact)]
+        ? [h("h2", {}, sp.name), h("p", {}, h("span", { class: "tag" }, sp.rarity)), h("p", {}, sp.fact),
+           h("p", {}, h("button", { type: "button", class: "btn", onclick: () => guide.open(sp.id) }, `More about ${sp.name.toLowerCase()}`))]
         : [h("h2", {}, "Not found yet"), h("p", {}, `Needs ${minutesText(sp.at * mult)} of calm time (${SESSION_LABEL[store.settings.session]} session).`)]);
   });
-  const main = h("main", { class: "wrap", id: "main" },
+  const main = h("main", { class: "wrap", id: "main" });
+  const guide = makeGuide(main);
+  main.append(
     h("div", { class: "page-head" }, h("h1", { tabindex: "-1" }, "Fish collection"),
       h("button", { type: "button", class: "btn", onclick: () => { view = "start"; paintStart(true); } }, "Back")),
     h("ul", { class: "aq-grid" }, ...items));
@@ -228,6 +257,15 @@ function buildPlay(): HTMLElement {
       newTank));
 
   const root = h("div", { class: "aq-play", id: "aq-play" }, tank.el, status, meter, clock, cardSlot, overlay, controls);
+  // tap a fish to read about it; the guide button opens everything found so far
+  const guide = makeGuide(root);
+  root.append(h("div", { class: "toolbar aq-toolbar" }, dayNight.clock, guide.button()));
+  tank.el.onpointerdown = (ev) => {
+    if (guide.isOpen()) return;
+    const el = (ev.target as HTMLElement | null)?.closest?.(".aq-fish:not(.aq-rest)") as HTMLElement | null;
+    const id = el?.dataset.species;
+    if (id && store.discovered.includes(id)) guide.open(id);
+  };
   els = { root, status, clock, meter, meterFill, meterMark, cardSlot, overlay, controls, pauseBtn, progress: null };
   overlayKey = "";
   return root;

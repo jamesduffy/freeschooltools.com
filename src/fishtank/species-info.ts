@@ -1,4 +1,4 @@
-import type { Active } from "./daynight";
+import type { Active } from "../shared/daynight";
 
 /** What the species page shows. One entry per kind of fish and sand creature.
  *  Keep these short and plain. Sizes are typical adult sizes, and "Active" says whether the animal is out by day, at night, or both. */

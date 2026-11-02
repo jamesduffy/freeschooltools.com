@@ -57,7 +57,12 @@ export function validateStore(data: unknown): Store | null {
   const t = isObj(data.tank) ? data.tank : {};
   const bank = typeof t.bank === "number" && Number.isFinite(t.bank) && t.bank >= 0 ? Math.min(t.bank, 1e7) : 0;
   const arrivedRaw = typeof t.arrived === "number" && Number.isFinite(t.arrived) ? Math.floor(t.arrived) : 0;
-  const arrived = Math.min(SPECIES.length, Math.max(0, arrivedRaw));
+  const storedArrived = Math.min(SPECIES.length, Math.max(0, arrivedRaw));
+  // The species list grew over time. Count what the saved calm time has earned under the current list, so a tank saved
+  // with the older, shorter list picks up the newer kinds whose time has already passed. Nothing earned is ever lost.
+  const earned = SPECIES.filter((sp) => sp.at * SESSION_MULTIPLIER[settings.session] <= bank).length;
+  const arrived = Math.max(storedArrived, earned);
+  if (arrived > storedArrived) for (const sp of SPECIES.slice(0, arrived)) if (!discovered.includes(sp.id)) discovered.push(sp.id);
   return { schemaVersion: 1, settings, discovered, tank: { bank, arrived } };
 }
 

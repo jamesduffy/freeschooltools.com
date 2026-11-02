@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ART } from "../src/aquarium/art";
 import { SPECIES } from "../src/aquarium/config";
-import { FISH, MAX_FISH, Tank } from "../src/aquarium/tank";
+import { FISH, MAX_FISH, TOTAL_FISH, Tank } from "../src/aquarium/tank";
 
 const dir = join(import.meta.dirname, "../src/aquarium");
 const files = readdirSync(dir).filter((f) => /\.(ts|css)$/.test(f));
@@ -47,23 +47,23 @@ describe("privacy: the source has no recording or network code", () => {
 });
 
 describe("art and tank", () => {
-  it("has art for all 8 species, each under 4 KB", () => {
-    expect(SPECIES).toHaveLength(8);
-    for (const sp of SPECIES) expect(ART[sp.id].body.length, sp.id).toBeLessThan(4096);
+  it("has art for every species, each under 4 KB", () => {
+    expect(SPECIES).toHaveLength(31);
+    for (const sp of SPECIES) expect(ART[sp.id]!.body.length, sp.id).toBeLessThan(4096);
   });
   it("keeps the fish count under 30", () => {
     expect(MAX_FISH).toBeLessThan(30);
     const tank = new Tank();
-    tank.show(8, true);
-    expect(tank.fishCount).toBe(MAX_FISH);
-    expect(Object.keys(FISH)).toHaveLength(8);
+    tank.show(SPECIES.length, true);
+    expect(tank.fishCount).toBe(TOTAL_FISH);
+    expect(Object.keys(FISH)).toHaveLength(SPECIES.length);
   });
   it("shows only the species that have arrived and can be cleared", () => {
     const tank = new Tank();
     tank.show(1, false);
-    expect(tank.fishCount).toBe(9); // a school of minnows
+    expect(tank.fishCount).toBe(6); // a school of minnows
     tank.show(2, false);
-    expect(tank.fishCount).toBe(11);
+    expect(tank.fishCount).toBe(7); // plus a guppy
     tank.clear();
     expect(tank.fishCount).toBe(0);
   });

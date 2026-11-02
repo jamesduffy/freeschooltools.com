@@ -125,3 +125,17 @@
   .aq-card { animation: none; }
   .aq-meter-fill, .aq-progress > div { transition: none; }
 }
+
+/* Night: a dark layer over the water (under the controls), animals that rest fade out, and a few glow */
+.aq-tank .twilight { z-index: 1; }
+.aq-tank .dark { z-index: 2; }
+.aq-fish { transition: none; }
+.aq-f-size { transition: transform 6s linear, opacity 4s ease var(--rest-delay, 0s); }
+.aq-fish.aq-rest { pointer-events: none; }
+.aq-fish.aq-rest .aq-f-size { opacity: 0; }
+.aq-fish.aq-glow { z-index: 3; }
+.aq-tank.is-night .aq-glow .aq-f-size { filter: drop-shadow(0 0 10px rgba(255, 236, 150, .95)) drop-shadow(0 0 22px rgba(255, 220, 120, .55)); }
+.aq-tank.is-night .aq-rays { opacity: .35; }
+.aq-toolbar { top: 56px; }
+.aq-fish:not(.aq-rest) { cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .aq-f-size { transition: opacity 4s ease var(--rest-delay, 0s); } }

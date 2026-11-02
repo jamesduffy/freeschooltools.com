@@ -11,5 +11,5 @@ export function banner(text: string): HTMLElement {
 }
 
 export function footerText(): string {
-  return `Build ${__BUILD_DATE__} · No accounts, no tracking, nothing leaves this computer.`;
+  return `Build ${__BUILD_DATE__}`;
 }

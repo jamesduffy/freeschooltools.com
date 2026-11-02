@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CYCLE_MINUTES, START_POSITION, isActiveIn, lightAt, phaseOf, positionAt, twilightAt } from "../src/fishtank/daynight";
+import { CYCLE_MINUTES, START_POSITION, isActiveIn, lightAt, phaseOf, positionAt, twilightAt } from "../src/shared/daynight";
 
 const MIN = 60000;
 describe("day and night", () => {

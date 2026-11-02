@@ -37,55 +37,8 @@ html, body { height: 100%; margin: 0; overflow: hidden; background: #123f5c; ove
   .kelp, .ambient, .walker.moving .starfish, .walker.moving .hermit { animation: none; }
 }
 
-/* ---- fonts and the species guide ---- */
-@font-face { font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/atkinson-400-latin.woff2") format("woff2"); }
-@font-face { font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/atkinson-700-latin.woff2") format("woff2"); }
 
-.toolbar { position: fixed; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); z-index: 9000; display: flex; gap: 8px; align-items: center; }
-.gd-open, .clock { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.45);
-  background: rgba(10, 36, 54, .62); color: #fff; font: 700 16px/1 "Atkinson Hyperlegible", system-ui, sans-serif; cursor: pointer; backdrop-filter: blur(4px); }
-.clock { cursor: default; padding: 6px 12px; }
-.gd-open:focus-visible, .gd button:focus-visible { outline: 3px solid #ffe27a; outline-offset: 2px; }
-
-.gd { position: fixed; inset: 0; z-index: 10000; background: rgba(6, 24, 38, .96); color: #e8f3f8; overflow: hidden; font-family: "Atkinson Hyperlegible", system-ui, sans-serif; touch-action: pan-y; -webkit-user-select: text; user-select: text; }
-.gd[hidden] { display: none; }
-.gd-body { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: max(14px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); max-width: 980px; margin: 0 auto; box-sizing: border-box; }
-.gd-top { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
-.gd-crumb { flex: 1; color: #9fc3d4; font-weight: 700; }
-.gd-title { margin: 0; font-size: 26px; color: #b7e63a; }
-.gd-title:focus, .gd-name:focus { outline: none; }
-.gd-sub { color: #9fc3d4; margin: 6px 0 16px; }
-.gd-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #3d6f8a; background: #123247; color: #e8f3f8; cursor: pointer; }
-.gd-icon-btn:hover, .gd-card:hover, .gd-arrow:hover { background: #1b4560; }
-
-.gd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.gd-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 12px; border-radius: 10px; border: 1px solid #2c5a75; background: #0f2b3d; color: inherit; font: inherit; cursor: pointer; text-align: center; }
-.gd-thumb { width: 100%; height: 72px; display: flex; align-items: center; justify-content: center; }
-.gd-thumb > svg { max-width: 100%; max-height: 100%; width: auto; height: auto; overflow: visible; }
-.gd-card-name { font-weight: 700; font-size: 16px; line-height: 1.2; }
-.gd-card-meta { color: #9fc3d4; font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
-
-.gd-name { margin: 14px 0 0; text-align: center; font-size: 32px; line-height: 1.1; color: #e8f3f8; }
-.gd-sci { text-align: center; font-style: italic; color: #b7e63a; font-size: 18px; margin-top: 4px; }
-.gd-badges { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 12px 0; }
-.gd-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; border: 1px solid #5d8ea8; font-weight: 700; font-size: 15px; background: #123247; }
-.gd-badge.gd-day { border-color: #f2c94c; color: #ffe27a; }
-.gd-badge.gd-night { border-color: #8fa4ff; color: #c4cfff; border-style: dashed; }
-.gd-badge.gd-both { border-color: #7ad0c0; color: #aef0e3; border-style: dotted; }
-.gd-text { max-width: 44rem; margin: 8px auto 4px; text-align: center; font-size: 18px; line-height: 1.45; }
-.gd-stage { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 4px; }
-.gd-picture { flex: 1; max-width: 560px; height: min(34vh, 280px); display: flex; align-items: center; justify-content: center; border-radius: 14px; background: linear-gradient(#2b86ad, #123f5c); padding: 14px; box-sizing: border-box; }
-.gd-picture > svg { max-width: 100%; max-height: 100%; width: auto; height: auto; overflow: visible; }
-.gd-arrow { width: 52px; height: 72px; border-radius: 10px; border: 1px solid #3d6f8a; background: #123247; color: #6fb0d0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-.gd-count { text-align: center; font-weight: 700; color: #cfe5ef; }
-.gd-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 14px auto 0; max-width: 760px; }
-.gd-fact { background: #0f2b3d; border: 1px solid #2c5a75; border-radius: 10px; padding: 10px 14px; }
-.gd-fact dt { color: #b7e63a; font-weight: 700; font-size: 15px; }
-.gd-fact dd { margin: 2px 0 0; font-size: 17px; }
-
-/* night: a dark blue layer over the whole tank, with animals that glow kept above it */
-.dark { position: absolute; inset: 0; background: #06142e; opacity: 0; pointer-events: none; z-index: 5500; }
-.twilight { position: absolute; inset: 0; background: linear-gradient(rgba(255, 150, 70, .55), rgba(180, 70, 120, .35)); opacity: 0; pointer-events: none; z-index: 5400; }
+/* glowing animals stay bright above the night layer */
 .fish.glow { z-index: 6000 !important; transition: filter 2s; }
 .tank.is-night .fish.glow { filter: drop-shadow(0 0 10px rgba(255, 236, 150, .95)) drop-shadow(0 0 22px rgba(255, 220, 120, .55)); }
 .tank.is-night .rays { opacity: .18 !important; }

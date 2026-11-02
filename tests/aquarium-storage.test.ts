@@ -1,14 +1,25 @@
+import { SPECIES } from "../src/aquarium/config";
 import { describe, expect, it } from "vitest";
 import { STORAGE_KEY, defaultStore, deleteAllToolKeys, loadStore, saveStore, validateStore } from "../src/aquarium/storage";
 import { fakeKV } from "./helpers";
 
 describe("aquarium storage", () => {
+  it("a tank saved with the older, shorter species list picks up newer kinds already earned", () => {
+    const old = { schemaVersion: 1, settings: {}, discovered: ["minnows", "butterflyfish", "pufferfish"], tank: { bank: 320, arrived: 3 } };
+    const s = validateStore(old)!;
+    const earned = SPECIES.filter((sp) => sp.at <= 320);
+    expect(s.tank.arrived).toBe(earned.length);
+    expect(earned.length).toBeGreaterThan(3);
+    for (const sp of earned) expect(s.discovered).toContain(sp.id);
+    expect(s.tank.bank).toBe(320);
+  });
   it("uses a key that starts with aquarium.", () => { expect(STORAGE_KEY).toBe("aquarium.v1"); });
   it("round-trips", () => {
     const kv = fakeKV();
     const s = defaultStore();
     s.settings.session = "long"; s.settings.showMeter = true; s.settings.sensitivityDb = 8;
-    s.discovered = ["minnows", "seahorse"]; s.tank = { bank: 321.5, arrived: 3 };
+    const n = SPECIES.filter((sp) => sp.at <= 321.5).length; // a consistent saved tank: what its calm time has earned
+    s.discovered = SPECIES.slice(0, n).map((sp) => sp.id); s.tank = { bank: 321.5, arrived: n };
     expect(saveStore(kv, s)).toBe(true);
     expect(loadStore(kv)).toEqual({ kind: "ok", store: s });
   });
@@ -25,7 +36,7 @@ describe("aquarium storage", () => {
     expect(s.settings.session).toBe("standard");
     expect(s.settings.showMeter).toBe(false);
     expect(s.discovered).toEqual(["minnows"]);
-    expect(s.tank).toEqual({ bank: 0, arrived: 8 });
+    expect(s.tank).toEqual({ bank: 0, arrived: SPECIES.length });
   });
   it("leaves newer versions alone as defaults", () => {
     expect(loadStore(fakeKV({ [STORAGE_KEY]: JSON.stringify({ schemaVersion: 9, tank: { bank: 5, arrived: 1 } }) })).kind).toBe("invalid");

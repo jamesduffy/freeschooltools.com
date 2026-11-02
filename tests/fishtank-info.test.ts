@@ -27,7 +27,7 @@ describe("species information", () => {
     expect(INFO.anglerfish!.active).toBe("night");
     expect(INFO.butterflyfish!.active).toBe("day");
   });
-  it("labels rarity from the weights", () => {
+  it("labels rarity from the ranks", () => {
     expect(rarityLabel(10)).toBe("Common"); expect(rarityLabel(7)).toBe("Uncommon"); expect(rarityLabel(4)).toBe("Rare");
     expect(rarityLabel(2)).toBe("Very rare"); expect(rarityLabel(1.2)).toBe("Legendary"); expect(rarityLabel(15)).toBe("Common");
   });
@@ -36,11 +36,11 @@ describe("species information", () => {
     const e = buildEntries();
     expect(e.length).toBe(ids.length);
     expect(new Set(e.map((x) => x.id)).size).toBe(e.length);
-    for (let i = 1; i < e.length; i++) expect(e[i - 1]!.weight).toBeGreaterThanOrEqual(e[i]!.weight);
-    expect(e[e.length - 1]!.weight).toBeLessThan(2);
+    for (let i = 1; i < e.length; i++) expect(e[i - 1]!.rank).toBeGreaterThanOrEqual(e[i]!.rank);
+    expect(e[e.length - 1]!.rank).toBeLessThan(2);
   });
   it("some day animals and some night animals can fill the tank at any time", async () => {
-    const { isActiveIn } = await import("../src/fishtank/daynight");
+    const { isActiveIn } = await import("../src/shared/daynight");
     for (const phase of ["day", "night", "dusk", "dawn"] as const) {
       const usable = ids.filter((id) => isActiveIn(INFO[id]!.active, phase));
       expect(usable.length, phase).toBeGreaterThanOrEqual(14);

@@ -24,7 +24,7 @@ app.append(
     h("a", { class: "brand", href: "/" }, logo(), h("span", {}, "Free School Tools")))),
   h("main", { class: "wrap" },
     h("h1", {}, "Free tools for school staff"),
-    h("p", { class: "lead" }, "Small tools that run in your browser. No accounts, no tracking, and nothing you type leaves your computer."),
+    h("p", { class: "lead" }, "Small tools that run in your browser."),
     h("div", { class: "grid" }, ...toolCards, suggest)),
   h("footer", { class: "site-footer" },
     h("p", {}, "Privacy: these tools make no network requests while you use them and have no analytics. What you enter is saved only in your own browser."),

@@ -5,12 +5,25 @@ export type Tool = { id: string; name: string; path: string; summary: string; st
  *  The production build fails while this still contains the placeholder marker. */
 export const SUGGESTION_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf5gSVWvgNhhB7WIlAx-bo8lFQFnmTqWqFgCiT8m1fK_GX3Hw/viewform?usp=publish-editor";
 
-export const tools: Tool[] = [
+/** Tools that are built and still work at their address, but are not shown on the homepage.
+ *  To list one again, move it into `tools` below. */
+export const unlistedTools: Tool[] = [
   {
     id: "iep",
     name: "IEP Goal Toolkit",
     path: "/iep/",
     summary: "Progress graphs, deadline dates, and goal wording checks. Saved only in your browser.",
+    status: "Prototype",
+  },
+];
+
+/** Tools shown as cards on the homepage. */
+export const tools: Tool[] = [
+  {
+    id: "fishtank",
+    name: "Fish Tank",
+    path: "/fishtank/",
+    summary: "A calm tank full of fish and sand creatures. Tap one to learn about it, tap the water and they swim away. Day turns to night.",
     status: "Prototype",
   },
   {

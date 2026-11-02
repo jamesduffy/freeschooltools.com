@@ -1,5 +1,7 @@
 import { h, s } from "../shared/dom";
 import type { SpeciesId } from "./config";
+import { EXTRA_ART } from "../fishtank/art-extra";
+import { MORE_ART } from "../fishtank/art-more";
 
 /** Original flat vector art. Each species is one SVG symbol defined once and reused with <use>.
  *  All fish face right. No outlines. Shapes differ by silhouette, not only color. */
@@ -7,7 +9,7 @@ export type Art = { w: number; h: number; body: string };
 
 const INK = "#1d2b3a";
 
-export const ART: Record<SpeciesId, Art> = {
+const BASE_ART: Record<string, Art> = {
   // Slim spindle with a forked tail
   minnows: { w: 60, h: 28, body:
     `<path d="M16 14 L1 3 Q7 14 1 25Z" fill="#8fb8cf"/>` +
@@ -85,6 +87,9 @@ export const ART: Record<SpeciesId, Art> = {
     `<circle cx="238" cy="44" r="2.6" fill="${INK}"/>` },
 };
 
+/** Every drawing: the 8 original species plus the 36 more shared with the Fish Tank. */
+export const ART: Record<string, Art> = { ...BASE_ART, ...EXTRA_ART, ...MORE_ART };
+
 export const symbolId = (id: SpeciesId) => `aq-sp-${id}`;
 
 function parse(markup: string): Element[] {
@@ -105,7 +110,7 @@ export function spriteSheet(): SVGElement {
 
 /** A reusable fish drawing. Size it with CSS width. */
 export function fishSvg(id: SpeciesId, cls = ""): SVGElement {
-  const a = ART[id];
+  const a = ART[id]!;
   const svg = s("svg", { viewBox: `0 0 ${a.w} ${a.h}`, class: cls, "aria-hidden": "true", focusable: "false", style: "display:block;width:100%;height:auto;overflow:visible" });
   svg.append(s("use", { href: `#${symbolId(id)}` }));
   return svg;
