@@ -53,7 +53,8 @@ function start() {
     }
   }
 
-  function build() {
+  /** `empty`: start with nothing in the water, so the first fish swim in (used when the page first opens). */
+  function build(empty = false) {
     W = tank.clientWidth; H = tank.clientHeight; S = Math.min(W, H);
     bounds = { w: W, h: H, floorTop: H * 0.8 };
     tank.replaceChildren();
@@ -72,7 +73,8 @@ function start() {
     for (const sl of slots) { for (const v of sl.views) v.el.remove(); sl.walker?.el.remove(); }
     slots = Array.from({ length: MAX_THINGS }, () => ({ views: [], big: false, phase: "gone" as const, timer: 0 }));
     target = randomTarget(); targetTimer = rnd(...RETARGET);
-    slots.slice(0, target).forEach((sl) => spawn(sl, true));
+    if (empty) slots.forEach((sl, i) => { sl.timer = 0.6 + i * rnd(1.2, 3.5); }); // empty water; they arrive one after another
+    else slots.slice(0, target).forEach((sl) => spawn(sl, true));
 
     // plants in front
     const kelp = (x: number, hgt: number, color: string, d: number) => {
@@ -262,7 +264,7 @@ function start() {
     }
   }
 
-  build();
+  build(true);
   requestAnimationFrame((n) => { last = n; frame(n); });
   // coming back to the app after it was hidden: carry on from now, and make sure the tank is still there
   document.addEventListener("visibilitychange", () => {
