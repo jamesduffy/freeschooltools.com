@@ -27,6 +27,13 @@ export const tools: Tool[] = [
     status: "Prototype",
   },
   {
+    id: "ocean",
+    name: "Ocean Aquarium",
+    path: "/ocean/",
+    summary: "A calm 3D ocean to leave running on the big screen. A diver slowly swims past kelp, coral, fish schools, mantas and a shipwreck.",
+    status: "Prototype",
+  },
+  {
     id: "timer",
     name: "Classroom Pie Timer",
     path: "/timer/",
